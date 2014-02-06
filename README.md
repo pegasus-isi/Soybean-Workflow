@@ -12,14 +12,14 @@ To access data from the iPlant iRods repository, you need a file in your
 home directory named ~/irods.iplant.env, with 0600 permission and
 content like:
 
-'''
+```
 irodsHost data.iplantcollaborative.org
 irodsPort 1247
 irodsUserName YOUR_IRODS_USERNAME
 irodsZone iplant
 # Pegasus requirement
 irodspassword 'YOUR_IRODS_PASSWORD'
-'''
+```
 
 To run on TACC, you need a X509 proxy. Create one with:
 
