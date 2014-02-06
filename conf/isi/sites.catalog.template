@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sitecatalog xmlns="http://pegasus.isi.edu/schema/sitecatalog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://pegasus.isi.edu/schema/sitecatalog http://pegasus.isi.edu/schema/sc-4.0.xsd" version="4.0">
+    <site  handle="local" arch="x86_64" os="LINUX">
+        <directory type="shared-scratch" path="$work_dir/scratch">
+            <file-server operation="all" url="file://$work_dir/scratch"/>
+        </directory>
+        <directory type="local-storage" path="$work_dir/outputs">
+            <file-server operation="all" url="file://$work_dir/outputs"/>
+        </directory>
+        <profile namespace="env" key="PATH">$pegasus_bin:$irods_bin:/usr/bin:/bin</profile>
+    </site>
+    <site  handle="execution" arch="x86_64" os="LINUX">
+        <profile namespace="pegasus" key="style" >condor</profile>
+        <profile namespace="condor" key="universe" >vanilla</profile>
+        <profile namespace="condor" key="requirements" >FileSystemDomain == "workflow.isi.edu"</profile>
+        <profile namespace="env" key="PATH">$irods_bin:/usr/bin:/bin</profile>
+    </site>
+    <site  handle="staging" arch="x86_64" os="LINUX">
+        <directory type="shared-scratch" path="/local-scratch/rynge/wf-scratch">
+            <file-server operation="all" url="gsiftp://workflow.isi.edu/local-scratch/rynge/wf-scratch"/>
+        </directory>
+    </site>
+    <site  handle="irods_iplant" arch="x86_64" os="LINUX">
+        <profile namespace="pegasus" key="irodsEnvFile" >$home/irods.iplant.env</profile>
+    </site>
+</sitecatalog>
+

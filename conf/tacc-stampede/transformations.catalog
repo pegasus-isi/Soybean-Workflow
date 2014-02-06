@@ -1,0 +1,12 @@
+tr pegasus::mpiexec {
+    site execution {
+        pfn "/home1/00384/rynge/software/pegasus-mpi-cluster/pegasus-mpi-cluster"
+        arch "x86_64"
+        os "linux"
+        type "INSTALLED"
+        profile globus "jobtype" "mpi"
+        profile globus "maxwalltime" "2880"
+        profile globus "hostcount" "1"
+        profile globus "count" "16"
+    }
+}

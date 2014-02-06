@@ -1,0 +1,11 @@
+#!/bin/bash
+
+set -e
+
+if [ ! -d software ]; then
+    tar xzf software.tar.gz
+fi
+
+java -Xmx10g -Djava.io.tmpdir=$PWD -jar ./software/gatk-2.5-2-gf57256b/"$@"
+
+
