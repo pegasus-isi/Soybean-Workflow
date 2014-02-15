@@ -28,6 +28,7 @@ os.sys.path.insert(0, lib_dir)
 # --- global variables ----------------------------------------------------------------
 
 logger = logging.getLogger("my_logger")
+conf   = None
 
 # --- classes -------------------------------------------------------------------------
 
@@ -38,7 +39,7 @@ class ComputeJob(Job):
 
     def __init__(self, name, cores=1, mem_gb=2, partition="default"):
         Job.__init__(self, name=name)
-
+        
         # label based clustering
         self.addProfile(Profile(Namespace.PEGASUS, 
                                 key="label",
@@ -63,6 +64,31 @@ class ComputeJob(Job):
         self.addProfile(Profile(Namespace.PEGASUS,
                                 key="pmc_request_memory",
                                 value=str(mem_mb)))
+
+        # special sauce for TACC - we want smaller jobs to go to the normal
+        # compute nodes and the large memory ones to go to the large memory
+        # nodes
+        if conf.get("local", "exec_env") == "tacc-stampede":
+            if re.search('largemem', partition):
+                self.addProfile(Profile(Namespace.GLOBUS,
+                                        key="queue",
+                                        value="largemem"))
+                self.addProfile(Profile(Namespace.GLOBUS,
+                                        key="hostcount",
+                                        value="1"))
+                self.addProfile(Profile(Namespace.GLOBUS,
+                                        key="count",
+                                        value="32"))
+            else:
+                self.addProfile(Profile(Namespace.GLOBUS,
+                                        key="queue",
+                                        value="normal"))
+                self.addProfile(Profile(Namespace.GLOBUS,
+                                        key="hostcount",
+                                        value="1"))
+                self.addProfile(Profile(Namespace.GLOBUS,
+                                        key="count",
+                                        value="16"))
 
 
 # --- functions -----------------------------------------------------------------------
@@ -101,7 +127,7 @@ def myexec(cmd_line):
                            % (cmd_line, r))
 
 
-def generate_site_catalog(conf):
+def generate_site_catalog():
     """ Uses a templete file to produce the Pegasus site catalog """
     
     logger.info("Generating sites.catalog")
@@ -112,6 +138,7 @@ def generate_site_catalog(conf):
 
     outf = open(conf.get("local", "work_dir") + "/sites.catalog", "w")
     outf.write(template.substitute(
+                        submit_host = socket.gethostname(),
                         home = os.path.expanduser('~'),
                         top_dir = conf.get("local", "top_dir"),
                         work_dir = conf.get("local", "work_dir"),
@@ -120,7 +147,7 @@ def generate_site_catalog(conf):
     outf.close()
    
 
-def read_input_lists(conf, ref_urls, fastq_urls):
+def read_input_lists(ref_urls, fastq_urls):
     """ The user provides a list of reference file URLs and pairs of fastq 
     URLs to be processed.
     """
@@ -168,26 +195,22 @@ def extract_sample_name(url):
     return name
 
 
-def generate_dax(conf):
+def generate_dax():
     """ generates the Pegasus DAX (directed acyclic graph - abstract XML)
     which is a description of a workflow """
     
     logger.info("Generating abstract workflow (DAX)")
-    
-    # decide how many lanes to keep in a group, that is how many lanes
-    # to pack into for example a pegasus-mpi-cluster job
-    lanes_per_group = int(conf.get("exec_environment", "cores_per_node"))
     
     dax = AutoADAG("pipeline")
         
     # email notificiations for when the state of the workflow changes
     dax.invoke('all',  conf.get("local", "pegasus_bin") +
                        "/../share/pegasus/notification/email")
-    add_executables(conf, dax)
+    add_executables(dax)
 
     # we need to bring a copy of the software with us
     software_tar = File("software.tar.gz")
-    software_tar.addPFN(PFN("gsiftp://" + socket.gethostname() + \
+    software_tar.addPFN(PFN("scp://" + socket.gethostname() + \
                conf.get("local", "work_dir") + "/software.tar.gz", "local"))
     dax.addFile(software_tar)    
     software_job = ComputeJob("software-wrapper", cores=1, mem_gb=1)
@@ -196,7 +219,7 @@ def generate_dax(conf):
 
     ref_urls = []
     fastq_urls = []
-    read_input_lists(conf, ref_urls, fastq_urls)
+    read_input_lists(ref_urls, fastq_urls)
    
     ref_files = []
     for url in ref_urls:
@@ -207,8 +230,6 @@ def generate_dax(conf):
         ref_files.append(f)
 
     for lane in range(len(fastq_urls) / 2):
-
-        group_id = lane // lanes_per_group
 
         # input files for this lane   
         paired_read1_fastq_file = File(extract_lfn(fastq_urls[lane * 2]))
@@ -239,33 +260,31 @@ def generate_dax(conf):
         recalib_plot_file = File(sample_name + "_reclib_plot")
         print_reads_file = File(sample_name + "_print_reads.bam")
         print_index_file = File(sample_name + "_print_reads.bai")
-        reduced_reads_file = File(sample_name + "_reduced_reads,bam")
-        reduced_index_file = File(sample_name + "_reduced_reads,bai")
+        reduced_reads_file = File(sample_name + "_reduced_reads.bam")
+        reduced_index_file = File(sample_name + "_reduced_reads.bai")
         unified_genotyper_reads_file = File(sample_name + "_unified_genotyper.bam")
         unified_genotyper_index_file = File(sample_name + "_unified_genotyper.bai")
         haplotype_caller_reads_file = File(sample_name + "_haplotype_caller.bam")
         haplotype_caller_index_file = File(sample_name + "_haplotype_caller.bai")
     
         # Step 1
-        align_job = alignment_to_reference(conf,
-                                           software_tar,
+        align_job = alignment_to_reference(software_tar,
                                            ref_files,
                                            paired_read1_fastq_file,
                                            paired_read2_fastq_file,
                                            sam_file)
         dax.addJob(align_job)
+        dax.depends(parent=software_job, child=align_job)
 
         # Step 2
-        sortsam_job = sort_sam(conf,
-                               software_tar,
+        sortsam_job = sort_sam(software_tar,
                                sam_file,
                                sorted_reads_file,
                                sorted_index_file)
         dax.addJob(sortsam_job)
         
         # Step 3
-        dedup_job = dedup(conf,
-                          software_tar,
+        dedup_job = dedup(software_tar,
                           sorted_reads_file,
                           sorted_index_file,
                           deduped_reads_file,
@@ -274,8 +293,7 @@ def generate_dax(conf):
         dax.addJob(dedup_job)
 
         # Step 4
-        add_repl_job = add_replace(conf,
-                                   software_tar,
+        add_repl_job = add_replace(software_tar,
                                    sample_name,
                                    deduped_reads_file,
                                    deduped_index_file,
@@ -284,8 +302,7 @@ def generate_dax(conf):
         dax.addJob(add_repl_job)
 
         # Step 5
-        realign_job = realign_target_creator(conf,
-                                             software_tar,
+        realign_job = realign_target_creator(software_tar,
                                              ref_files,
                                              addrepl_reads_file,
                                              addrepl_index_file,
@@ -293,8 +310,7 @@ def generate_dax(conf):
         dax.addJob(realign_job)
 
         # Step 6
-        indel_realign_job = indel_realign(conf,
-                                          software_tar,
+        indel_realign_job = indel_realign(software_tar,
                                           ref_files, 
                                           addrepl_reads_file,
                                           addrepl_index_file,
@@ -304,8 +320,7 @@ def generate_dax(conf):
         dax.addJob(indel_realign_job)
 
         # Step 7
-        base_calib_job = base_recalibrator(conf,
-                                           software_tar,
+        base_calib_job = base_recalibrator(software_tar,
                                            ref_files,
                                            indel_realigned_reads_file,
                                            indel_realigned_index_file, 
@@ -315,8 +330,7 @@ def generate_dax(conf):
         dax.addJob(base_calib_job)
 
         # Step 8
-        base_calib_2_job = base_recalibrator_2(conf,
-                                               software_tar,
+        base_calib_2_job = base_recalibrator_2(software_tar,
                                                ref_files,
                                                indel_realigned_reads_file,
                                                indel_realigned_index_file,
@@ -326,8 +340,7 @@ def generate_dax(conf):
         dax.addJob(base_calib_2_job)
 
         # Step 9
-        print_reads_job = print_reads(conf,
-                                      software_tar,
+        print_reads_job = print_reads(software_tar,
                                       ref_files,
                                       indel_realigned_reads_file,
                                       indel_realigned_index_file,
@@ -337,8 +350,7 @@ def generate_dax(conf):
         dax.addJob(print_reads_job)
 
         # Step 10
-        reduce_reads_job = reduce_reads(conf,
-                                        software_tar,
+        reduce_reads_job = reduce_reads(software_tar,
                                         ref_files,
                                         print_reads_file,
                                         print_index_file,
@@ -347,8 +359,7 @@ def generate_dax(conf):
         dax.addJob(reduce_reads_job)
 
         # Step 11
-        unified_genotyper_job = unified_genotyper(conf,
-                                                  software_tar,
+        unified_genotyper_job = unified_genotyper(software_tar,
                                                   ref_files,
                                                   reduced_reads_file,
                                                   reduced_index_file,
@@ -356,8 +367,7 @@ def generate_dax(conf):
                                                   unified_genotyper_index_file)
         dax.addJob(unified_genotyper_job)
    
-        haplotype_caller_job = haplotype_caller(conf, 
-                                                software_tar,
+        haplotype_caller_job = haplotype_caller(software_tar,
                                                 ref_files,
                                                 reduced_reads_file,
                                                 reduced_index_file,
@@ -372,11 +382,10 @@ def generate_dax(conf):
     dax_file.close()
 
 
-def add_executables(conf, dax):
+def add_executables(dax):
     """ adds executables to the DAX-level replica catalog """
 
-
-    base_url = "gsiftp://" + socket.gethostname() + \
+    base_url = "scp://" + socket.gethostname() + \
                conf.get("local", "top_dir")    
     
     bwa_wrapper = Executable(name="bwa-wrapper", 
@@ -406,7 +415,7 @@ def add_executables(conf, dax):
     dax.addExecutable(software_wrapper)
     
 
-def alignment_to_reference(conf, software_file, ref_files,
+def alignment_to_reference(software_file, ref_files,
                            fastq1, fastq2, sam):
     """step 1
     bwa mem -M Soybean_ref_genome.fasta $fastq[0] $fastq[1] > $sam
@@ -430,7 +439,7 @@ def alignment_to_reference(conf, software_file, ref_files,
     return j
 
 
-def sort_sam(conf, software_file, sam, sorted_sam, sorted_index):
+def sort_sam(software_file, sam, sorted_sam, sorted_index):
     """step 2
     java -Xmx22g -jar picard-tools-1.92/SortSam.jar CREATE_INDEX=TRUE
     MAX_RECORDS_IN_RAM=5000000 TMP_DIR= /home/skhan/tmp/ I=$hash_files{'Sam'}
@@ -455,7 +464,7 @@ def sort_sam(conf, software_file, sam, sorted_sam, sorted_index):
     return j
 
 
-def dedup(conf, software_file, sorted_reads, sorted_index,
+def dedup(software_file, sorted_reads, sorted_index,
           deduped_reads, deduped_index, deduped_metrics):
     """ step 3
     java -Xmx22g -jar picard-tools-1.92/MarkDuplicates.jar CREATE_INDEX=TRUE
@@ -484,7 +493,7 @@ def dedup(conf, software_file, sorted_reads, sorted_index,
     return j
 
 
-def add_replace(conf, software_file, sample_name, 
+def add_replace(software_file, sample_name, 
                 deduped_reads, deduped_index, 
                 addrepl_reads, addrepl_index):
     """ step 4
@@ -520,7 +529,7 @@ def add_replace(conf, software_file, sample_name,
     return j
 
 
-def realign_target_creator(conf, software_file, ref_files,
+def realign_target_creator(software_file, ref_files,
                            addrepl_reads, addrepl_index, intervals):
     """ step 5
     java -Xmx10g -jar GATK/GenomeAnalysisTK.jar -T RealignerTargetCreator -R
@@ -547,7 +556,7 @@ def realign_target_creator(conf, software_file, ref_files,
     return j
 
 
-def indel_realign(conf, software_file, ref_files,
+def indel_realign(software_file, ref_files,
                   addrepl_reads, addrepl_index, intervals,
                   indel_realigned_reads, indel_realigned_index):
     """ step 6
@@ -577,7 +586,7 @@ def indel_realign(conf, software_file, ref_files,
     return j
 
 
-def base_recalibrator(conf, software_file, ref_files,
+def base_recalibrator(software_file, ref_files,
                       indel_realigned_reads, indel_realigned_index,
                       intervals, bqsr, plot):
     """ step 7
@@ -609,7 +618,7 @@ def base_recalibrator(conf, software_file, ref_files,
     return j
 
 
-def base_recalibrator_2(conf, software_file, ref_files,
+def base_recalibrator_2(software_file, ref_files,
                         indel_realigned_reads, indel_realigned_index,
                         bqsr, recalib_bqsr, recalib_plot):
     """ step 8
@@ -641,7 +650,7 @@ def base_recalibrator_2(conf, software_file, ref_files,
     return j
 
 
-def print_reads(conf, software_file, ref_files,
+def print_reads(software_file, ref_files,
                 indel_realigned_reads, indel_realigned_index, bqsr,
                 print_reads_file, print_index_file):
     """ step 9
@@ -669,7 +678,7 @@ def print_reads(conf, software_file, ref_files,
     return j
 
 
-def reduce_reads(conf, software_file, ref_files,
+def reduce_reads(software_file, ref_files,
                  print_reads_file, print_index_file,
                  reduced_reads_file, reduced_index_file):
     """ step 10
@@ -696,7 +705,7 @@ def reduce_reads(conf, software_file, ref_files,
     return j
 
 
-def unified_genotyper(conf, software_file, ref_files,
+def unified_genotyper(software_file, ref_files,
                       reduced_reads_file, reduced_index_file,
                       unified_genotyper_reads, unified_genotype_index):
     """ step 11
@@ -721,7 +730,7 @@ def unified_genotyper(conf, software_file, ref_files,
     return j
 
 
-def haplotype_caller(conf, software_file, ref_files,
+def haplotype_caller(software_file, ref_files,
                     reduced_reads, reduced_index,
                     haplotype_caller_reads, haplotype_caller_index):
     """
@@ -731,7 +740,7 @@ def haplotype_caller(conf, software_file, ref_files,
     """
    
     j = ComputeJob("gatk-wrapper", cores = 1, mem_gb = 10,
-                   partition = "largemem")
+                   partition = "largemem_haplotype")
     j.uses(software_file, link=Link.INPUT)
     for f in ref_files:
         j.uses(f, link=Link.INPUT)
@@ -750,6 +759,7 @@ def haplotype_caller(conf, software_file, ref_files,
 
 
 def main():
+    global conf
     
     setup_logger(False)
 
@@ -803,7 +813,7 @@ def main():
     myexec("tar czf " + conf.get("local", "work_dir") + \
            "/software.tar.gz software")
 
-    generate_site_catalog(conf)
+    generate_site_catalog()
 
     # FIXME: what should we copy / keep in the top dir?
     myexec("cp conf/" + conf.get("local", "exec_env") + 
@@ -813,7 +823,7 @@ def main():
            "/replica.catalog " + 
            conf.get("local", "work_dir") + "/replica.catalog")
 
-    generate_dax(conf)
+    generate_dax()
 
     # submit
     logger.info("Planning workflow...")
@@ -823,8 +833,10 @@ def main():
           "/conf/" + conf.get("local", "exec_env") + "/pegasus.conf" + \
           " --dir ." + \
           " --nocleanup" + \
-          " --sites execution" + \
-          " --output-site local"
+          " --sites execution"
+    
+    if conf.get("exec_environment", "output_site") != "":
+        cmd += " --output-site " + conf.get("exec_environment", "output_site")
               
     if conf.get("exec_environment", "staging_site") != "":
         cmd += " --staging " + conf.get("exec_environment", "staging_site")
