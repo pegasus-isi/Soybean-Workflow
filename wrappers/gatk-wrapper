@@ -1,11 +1,39 @@
 #!/bin/bash
 
-set -e
+set -v
 
 if [ ! -d software ]; then
     tar xzf software.tar.gz
 fi
 
-java -Xmx10g -Djava.io.tmpdir=$PWD -jar ./software/gatk-2.5-2-gf57256b/"$@"
+export TMPDIR=`pwd`
 
+OUTFILE=`mktemp -t gatk-output.XXXXXXXXXX` || exit 1
+
+java -Xmx10g -Djava.io.tmpdir=$TMPDIR \
+     -jar ./software/GenomeAnalysisTK-2.8-1-g932cd3a/GenomeAnalysisTK.jar \
+     "$@" \
+     >$OUTFILE 2>&1
+EXITCODE=$?
+
+if [ "x$EXITCODE" != "x0" ]; then
+    # RealignerTargetCreator might need a second pass with different options 
+    if (echo "$@" | grep RealignerTargetCreator) >/dev/null 2>&1; then
+        if (cat $OUTFILE | grep -E "extremely high quality score|wrong encoding") >/dev/null 2>&1; then
+            cat $OUTFILE
+            echo
+            echo "Rerunning with --fix_misencoded_quality_scores..."
+            java -Xmx10g -Djava.io.tmpdir=$TMPDIR \
+                 -jar ./software/GenomeAnalysisTK-2.8-1-g932cd3a/GenomeAnalysisTK.jar \
+                 "$@" \
+                 --fix_misencoded_quality_scores \
+                 >$OUTFILE 2>&1
+            EXITCODE=$?
+        fi
+    fi
+fi
+
+cat $OUTFILE
+rm -f $OUTFILE
+exit $EXITCODE
 

@@ -8,6 +8,7 @@
             <file-server operation="all" url="file://$work_dir/outputs"/>
         </directory>
         <profile namespace="env" key="PATH">$pegasus_bin:$irods_bin:/usr/bin:/bin</profile>
+        <profile namespace="pegasus" key="SSH_PRIVATE_KEY">$home/.ssh/workflow</profile>
     </site>
     <site  handle="execution" arch="x86_64" os="LINUX">
         <profile namespace="pegasus" key="style" >condor</profile>
@@ -22,6 +23,11 @@
     </site>
     <site  handle="irods_iplant" arch="x86_64" os="LINUX">
         <profile namespace="pegasus" key="irodsEnvFile" >$home/irods.iplant.env</profile>
+    </site>
+    <site  handle="osg-xsede" arch="x86_64" os="LINUX">
+        <directory type="local-storage" path="/local-scratch/public_html/rynge/soybean/outputs">
+            <file-server operation="all" url="gsiftp://osg-xsede.grid.iu.edu/local-scratch/public_html/rynge/soybean/outputs"/>
+        </directory>
     </site>
 </sitecatalog>
 

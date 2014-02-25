@@ -1,8 +1,8 @@
-irods:///iplant/home/shared/digbio/NGS_Nguyen/NguyenLab_April2013_25genome_sequencing/ref_genome/Soybean_ref_genome.dict
-irods:///iplant/home/shared/digbio/NGS_Nguyen/NguyenLab_April2013_25genome_sequencing/ref_genome/Soybean_ref_genome.fasta
-irods:///iplant/home/shared/digbio/NGS_Nguyen/NguyenLab_April2013_25genome_sequencing/ref_genome/Soybean_ref_genome.fasta.amb
-irods:///iplant/home/shared/digbio/NGS_Nguyen/NguyenLab_April2013_25genome_sequencing/ref_genome/Soybean_ref_genome.fasta.ann
-irods:///iplant/home/shared/digbio/NGS_Nguyen/NguyenLab_April2013_25genome_sequencing/ref_genome/Soybean_ref_genome.fasta.bwt
-irods:///iplant/home/shared/digbio/NGS_Nguyen/NguyenLab_April2013_25genome_sequencing/ref_genome/Soybean_ref_genome.fasta.fai
-irods:///iplant/home/shared/digbio/NGS_Nguyen/NguyenLab_April2013_25genome_sequencing/ref_genome/Soybean_ref_genome.fasta.pac
-irods:///iplant/home/shared/digbio/NGS_Nguyen/NguyenLab_April2013_25genome_sequencing/ref_genome/Soybean_ref_genome.fasta.sa
+irods://taccCorralRes/iplant/home/shared/digbio/NGS_Nguyen/NguyenLab_April2013_25genome_sequencing/ref_genome/Soybean_ref_genome.dict
+irods://taccCorralRes/iplant/home/shared/digbio/NGS_Nguyen/NguyenLab_April2013_25genome_sequencing/ref_genome/Soybean_ref_genome.fasta
+irods://taccCorralRes/iplant/home/shared/digbio/NGS_Nguyen/NguyenLab_April2013_25genome_sequencing/ref_genome/Soybean_ref_genome.fasta.amb
+irods://taccCorralRes/iplant/home/shared/digbio/NGS_Nguyen/NguyenLab_April2013_25genome_sequencing/ref_genome/Soybean_ref_genome.fasta.ann
+irods://taccCorralRes/iplant/home/shared/digbio/NGS_Nguyen/NguyenLab_April2013_25genome_sequencing/ref_genome/Soybean_ref_genome.fasta.bwt
+irods://taccCorralRes/iplant/home/shared/digbio/NGS_Nguyen/NguyenLab_April2013_25genome_sequencing/ref_genome/Soybean_ref_genome.fasta.fai
+irods://taccCorralRes/iplant/home/shared/digbio/NGS_Nguyen/NguyenLab_April2013_25genome_sequencing/ref_genome/Soybean_ref_genome.fasta.pac
+irods://taccCorralRes/iplant/home/shared/digbio/NGS_Nguyen/NguyenLab_April2013_25genome_sequencing/ref_genome/Soybean_ref_genome.fasta.sa

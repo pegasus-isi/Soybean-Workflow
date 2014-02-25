@@ -8,7 +8,7 @@
             <file-server operation="all" url="scp://$submit_host$work_dir/outputs"/>
         </directory>
         <profile namespace="env" key="PATH">$pegasus_bin:$irods_bin:/usr/bin:/bin</profile>
-	<profile namespace="pegasus" key="SSH_PRIVATE_KEY">$home/workflow_key</profile>
+        <profile namespace="pegasus" key="SSH_PRIVATE_KEY">$home/.ssh/workflow</profile>
     </site>
     <site  handle="execution" arch="x86_64" os="LINUX">
         <grid  type="gt5" contact="login5.stampede.tacc.utexas.edu:2119/jobmanager-slurm" scheduler="Fork" jobtype="auxillary"/>
@@ -34,8 +34,8 @@
         </directory>
     </site>
     <site  handle="osg-xsede" arch="x86_64" os="LINUX">
-        <directory type="local-storage" path="/local-scratch/public_html/rynge/soybean/outputs">
-            <file-server operation="all" url="gsiftp://osg-xsede.grid.iu.edu/local-scratch/public_html/rynge/soybean/outputs"/>
+        <directory type="local-storage" path="/local-scratch/public_html/rynge/soybean/outputs-tacc">
+            <file-server operation="all" url="gsiftp://osg-xsede.grid.iu.edu/local-scratch/public_html/rynge/soybean/outputs-tacc"/>
         </directory>
     </site>
 </sitecatalog>
