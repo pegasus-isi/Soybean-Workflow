@@ -8,7 +8,7 @@
             <file-server operation="all" url="file://$work_dir/outputs"/>
         </directory>
         <profile namespace="env" key="PATH">$pegasus_bin:$irods_bin:/usr/bin:/bin</profile>
-	<profile namespace="pegasus" key="SSH_PRIVATE_KEY">$home/workflow_key</profile>
+	<profile namespace="pegasus" key="SSH_PRIVATE_KEY">$home/.ssh/workflow</profile>
     </site>
     <site  handle="execution" arch="x86_64" os="LINUX">
         <profile namespace="pegasus" key="style" >condor</profile>
