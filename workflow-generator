@@ -24,11 +24,12 @@ lib_dir = subprocess.Popen(pegasus_config,
 os.sys.path.insert(0, lib_dir)
 
 
-
 # --- global variables ----------------------------------------------------------------
 
-logger = logging.getLogger("my_logger")
-conf   = None
+logger      = logging.getLogger("my_logger")
+conf        = None
+added_execs = []
+
 
 # --- classes -------------------------------------------------------------------------
 
@@ -186,7 +187,7 @@ def extract_lfn(url):
 def extract_fasta_basefile(file_list):
     """ find the base fasta file given a list of reference files """
     for f in file_list:
-        if re.search(".fasta$", f.name):
+        if re.search("(.fa|.fasta)$", f.name):
             return f
 
 
@@ -210,7 +211,6 @@ def generate_dax():
     # email notificiations for when the state of the workflow changes
     dax.invoke('all',  conf.get("local", "pegasus_bin") +
                        "/../share/pegasus/notification/email")
-    add_executables(dax)
     
     ref_urls = []
     fastq_urls = []
@@ -226,10 +226,16 @@ def generate_dax():
     software_tar.addPFN(PFN("scp://" + socket.gethostname() + \
                conf.get("local", "work_dir") + "/software.tar.gz", "local"))
     dax.addFile(software_tar)    
+    add_executable(dax, "software-wrapper", "software-wrapper")
     software_job = ComputeJob("software-wrapper", cores=1, mem_gb=1)
     software_job.uses(software_tar, link=Link.INPUT)
     dax.addJob(software_job)
 
+    # we need to track files across jobs
+    wf_files = {}
+    genotyper_inputs = []
+
+    # reference genome    
     ref_files = []
     for url in ref_urls:
         f = File(extract_lfn(url))
@@ -241,291 +247,194 @@ def generate_dax():
     for lane in range(len(fastq_urls) / 2):
 
         # input files for this lane   
-        paired_read1_fastq_file = File(extract_lfn(fastq_urls[lane * 2]))
-        paired_read1_fastq_file.addPFN(PFN(fastq_urls[lane * 2], "irods_iplant"))
-        dax.addFile(paired_read1_fastq_file)
+        wf_files['paired_read1_fastq'] = File(extract_lfn(fastq_urls[lane * 2]))
+        wf_files['paired_read1_fastq'].addPFN(PFN(fastq_urls[lane * 2], "irods_iplant"))
+        dax.addFile(wf_files['paired_read1_fastq'])
 
-        paired_read2_fastq_file = File(extract_lfn(fastq_urls[lane * 2 + 1]))
-        paired_read2_fastq_file.addPFN(PFN(fastq_urls[lane * 2 + 1], "irods_iplant"))
-        dax.addFile(paired_read2_fastq_file)
+        wf_files['paired_read2_fastq'] = File(extract_lfn(fastq_urls[lane * 2 + 1]))
+        wf_files['paired_read2_fastq'].addPFN(PFN(fastq_urls[lane * 2 + 1], "irods_iplant"))
+        dax.addFile(wf_files['paired_read2_fastq'])
 
-        sample_name = extract_sample_name(paired_read1_fastq_file.name)
+        sample_name = extract_sample_name(wf_files['paired_read1_fastq'].name)
 
         # files we need to track
-        sam_file = File(sample_name + "_aligned_reads.sam")
-        sorted_reads_file = File(sample_name + "_sorted_reads.bam")
-        sorted_index_file = File(sample_name + "_sorted_reads.bai")
-        deduped_reads_file = File(sample_name + "_deduped_reads.bam")
-        deduped_index_file = File(sample_name + "_deduped_reads.bai")
-        deduped_metrics_file = File(sample_name + "_deduped.metrics")
-        addrepl_reads_file = File(sample_name + "_addrepl.bam")
-        addrepl_index_file = File(sample_name + "_addrepl.bai")
-        intervals_file = File(sample_name + "_intervals.list")
-        indel_realigned_reads_file = File(sample_name + "_indel_realigned.bam")
-        indel_realigned_index_file = File(sample_name + "_indel_realigned.bai")
-        bqsr_file = File(sample_name + "_bqsr")
-        plot_file = File(sample_name + "_plot")
-        recalib_bqsr_file = File(sample_name + "_reclib_bqsr")
-        recalib_plot_file = File(sample_name + "_reclib_plot")
-        print_reads_file = File(sample_name + "_print_reads.bam")
-        print_index_file = File(sample_name + "_print_reads.bai")
-        reduced_reads_file = File(sample_name + "_reduced_reads.bam")
-        reduced_index_file = File(sample_name + "_reduced_reads.bai")
-        unified_genotyper_file = File(sample_name + "_unified_genotyper.vcf")
-        unified_genotyper_index_file = File(sample_name + "_unified_genotyper.vcf.idx")
-        haplotype_caller_reads_file = File(sample_name + "_haplotype_caller.bam")
-        haplotype_caller_index_file = File(sample_name + "_haplotype_caller.bai")
+        wf_files['sam'] = File(sample_name + "_aligned_reads.sam")
+        wf_files['sorted_reads'] = File(sample_name + "_sorted_reads.bam")
+        wf_files['sorted_index'] = File(sample_name + "_sorted_reads.bai")
+        wf_files['deduped_reads'] = File(sample_name + "_deduped_reads.bam")
+        wf_files['deduped_index'] = File(sample_name + "_deduped_reads.bai")
+        wf_files['deduped_metrics'] = File(sample_name + "_deduped.metrics")
+        wf_files['addrepl_reads'] = File(sample_name + "_addrepl.bam")
+        wf_files['addrepl_index'] = File(sample_name + "_addrepl.bai")
+        wf_files['intervals'] = File(sample_name + "_intervals.list")
+        wf_files['indel_realigned_reads'] = File(sample_name + "_indel_realigned.bam")
+        wf_files['indel_realigned_index'] = File(sample_name + "_indel_realigned.bai")
+        wf_files['reduced_reads'] = File(sample_name + "_reduced_reads.bam")
+        wf_files['reduced_index'] = File(sample_name + "_reduced_reads.bai")
     
-        # Step 1
-        align_job = alignment_to_reference(software_tar,
+        # Step 1 - dependent jobs are now added in the parent jobs
+        align_job = alignment_to_reference(sample_name,
+                                           dax,
+                                           software_tar,
                                            ref_files,
-                                           paired_read1_fastq_file,
-                                           paired_read2_fastq_file,
-                                           sam_file)
+                                           wf_files)
         dax.addJob(align_job)
         dax.depends(parent=software_job, child=align_job)
 
-        # Step 2
-        sortsam_job = sort_sam(software_tar,
-                               sam_file,
-                               sorted_reads_file,
-                               sorted_index_file)
-        dax.addJob(sortsam_job)
-        
-        # Step 3
-        dedup_job = dedup(software_tar,
-                          sorted_reads_file,
-                          sorted_index_file,
-                          deduped_reads_file,
-                          deduped_index_file,
-                          deduped_metrics_file)
-        dax.addJob(dedup_job)
+        # keep a list of the files needed for the combined genotyper
+        genotyper_inputs.append(wf_files['reduced_reads'])
+        genotyper_inputs.append(wf_files['reduced_index'])
 
-        # Step 4
-        add_repl_job = add_replace(software_tar,
-                                   sample_name,
-                                   deduped_reads_file,
-                                   deduped_index_file,
-                                   addrepl_reads_file,
-                                   addrepl_index_file)
-        dax.addJob(add_repl_job)
 
-        # Step 5
-        realign_job = realign_target_creator(software_tar,
-                                             ref_files,
-                                             addrepl_reads_file,
-                                             addrepl_index_file,
-                                             intervals_file)
-        dax.addJob(realign_job)
+    # build the bam file list required by the genotyper
+    wf_files['reduced_reads_list'] = File('reduced_reads.list')
+    pfn = conf.get("local", "work_dir") + "/" + wf_files['reduced_reads_list'].name
+    wf_files['reduced_reads_list'].addPFN(PFN(pfn, "local"))
+    dax.addFile(wf_files['reduced_reads_list'])
+    lf = open(pfn, "w")
+    for f in genotyper_inputs:
+        if re.search("(.bam)$", f.name):
+            lf.write("" + f.name + "\n")
+    lf.close()
 
-        # Step 6
-        indel_realign_job = indel_realign(software_tar,
-                                          ref_files, 
-                                          addrepl_reads_file,
-                                          addrepl_index_file,
-                                          intervals_file,
-                                          indel_realigned_reads_file,
-                                          indel_realigned_index_file)
-        dax.addJob(indel_realign_job)
+    u_snp_job = unified_genotyper_snp(dax, software_tar, ref_files, wf_files, genotyper_inputs)
+    dax.addJob(u_snp_job)
 
-        # Step 7
-        #base_calib_job = base_recalibrator(software_tar,
-        #                                   ref_files,
-        #                                   indel_realigned_reads_file,
-        #                                   indel_realigned_index_file, 
-        #                                   intervals_file,
-        #                                   bqsr_file,
-        #                                   plot_file)
-        #dax.addJob(base_calib_job)
+    snp_filter_job = filtering_snp(dax, software_tar, ref_files, wf_files)
+    dax.addJob(snp_filter_job)
 
-        # Step 8
-        #base_calib_2_job = base_recalibrator_2(software_tar,
-        #                                       ref_files,
-        #                                       indel_realigned_reads_file,
-        #                                       indel_realigned_index_file,
-        #                                       bqsr_file,
-        #                                       recalib_bqsr_file, 
-        #                                       recalib_plot_file)
-        #dax.addJob(base_calib_2_job)
+    u_indel_job = unified_genotyper_indel(dax, software_tar, ref_files, wf_files, genotyper_inputs)
+    dax.addJob(u_indel_job)
 
-        # Step 9
-        #print_reads_job = print_reads(software_tar,
-        #                              ref_files,
-        #                              indel_realigned_reads_file,
-        #                              indel_realigned_index_file,
-        #                              bqsr_file,
-        #                              print_reads_file,
-        #                              print_index_file)
-        #dax.addJob(print_reads_job)
-
-        # Step 10
-        reduce_reads_job = reduce_reads(software_tar,
-                                        ref_files,
-                                        indel_realigned_reads_file,
-                                        indel_realigned_index_file,
-                                        reduced_reads_file,
-                                        reduced_index_file)
-        dax.addJob(reduce_reads_job)
-
-        # Step 11
-        unified_genotyper_job = unified_genotyper(software_tar,
-                                                  ref_files,
-                                                  reduced_reads_file,
-                                                  reduced_index_file,
-                                                  unified_genotyper_file,
-                                                  unified_genotyper_index_file)
-        dax.addJob(unified_genotyper_job)
-   
-        #haplotype_caller_job = haplotype_caller(software_tar,
-        #                                        ref_files,
-        #                                        reduced_reads_file,
-        #                                        reduced_index_file,
-        #                                        haplotype_caller_reads_file,
-        #                                        haplotype_caller_index_file)
-        #dax.addJob(haplotype_caller_job)
-        
-        
+    indel_filter_job = filtering_indel(dax, software_tar, ref_files, wf_files)
+    dax.addJob(indel_filter_job)
+ 
     # write out the dax
     dax_file = open(conf.get("local", "work_dir") + "/pipeline.dax", "w")
     dax.writeXML(dax_file)
     dax_file.close()
 
 
-def add_executables(dax):
+def add_executable(dax, logical_name, wrapper_name):
     """ adds executables to the DAX-level replica catalog """
+    global added_execs
+
+    if logical_name in added_execs:
+        return
 
     base_url = "scp://" + socket.gethostname() + \
                conf.get("local", "top_dir")    
     
-    bwa_wrapper = Executable(name="bwa-wrapper", 
-                             arch="x86_64",
-                             installed=False)
-    bwa_wrapper.addPFN(PFN(base_url + "/wrappers/bwa-wrapper", "local"))
-    dax.addExecutable(bwa_wrapper)
-    
-    picard_wrapper = Executable(name="picard-wrapper",
-                                arch="x86_64",
-                                installed=False)
-    picard_wrapper.addPFN(PFN(base_url + "/wrappers/picard-wrapper", "local"))
-    dax.addExecutable(picard_wrapper)
-    
-    gatk_wrapper = Executable(name="gatk-wrapper", 
-                              arch="x86_64",
-                              installed=False)
-    gatk_wrapper.addPFN(PFN(base_url + "/wrappers/gatk-wrapper", "local"))
-    dax.addExecutable(gatk_wrapper)
-    
-    # software setup job
-    software_wrapper = Executable(name="software-wrapper",
-                                  arch="x86_64",
-                                  installed=False)
-    software_wrapper.addPFN(PFN(base_url + "/wrappers/software-wrapper", 
-                                "local"))
-    dax.addExecutable(software_wrapper)
+    wrapper = Executable(name=logical_name, 
+                         arch="x86_64",
+                         installed=False)
+    wrapper.addPFN(PFN(base_url + "/wrappers/" + wrapper_name, "local"))
+    dax.addExecutable(wrapper)
+
+    added_execs.append(logical_name)
     
 
-def alignment_to_reference(software_file, ref_files,
-                           fastq1, fastq2, sam):
-    """step 1
-    bwa mem -M Soybean_ref_genome.fasta $fastq[0] $fastq[1] > $sam
-    """
-    j = ComputeJob("bwa-wrapper", cores = 1, mem_gb = 2,
+def alignment_to_reference(sample_name, dax, software_tar, ref_files, wf_files):
+    
+    # Note that the cores we give Pegasus and the -t does not match. 
+    # Oversubscriptions is ok, as bwa can not keep all the cores busy 100%
+    # of the time.
+    add_executable(dax, "alignment_to_reference", "bwa-wrapper")
+    j = ComputeJob("alignment_to_reference", cores = 8, mem_gb = 8,
                    partition = "bwa")
     
     # determine which is the fasta file
     for f in ref_files:
         j.uses(f, link=Link.INPUT)
-    j.uses(software_file, link=Link.INPUT)
-    j.uses(fastq1, link=Link.INPUT)
-    j.uses(fastq2, link=Link.INPUT)
-    j.uses(sam, link=Link.OUTPUT, transfer=False)
+    j.uses(software_tar, link=Link.INPUT)
+    j.uses(wf_files['paired_read1_fastq'], link=Link.INPUT)
+    j.uses(wf_files['paired_read2_fastq'], link=Link.INPUT)
+    #j.uses(wf_files['sam'], link=Link.OUTPUT, transfer=False)
+    # temp store the output file
+    j.uses(wf_files['sam'], link=Link.OUTPUT, transfer=True)
     
-    j.setStdout(sam)
+    j.setStdout(wf_files['sam'])
     
     j.addArguments("mem",
+                   "-t", "12",
                    "-M", extract_fasta_basefile(ref_files), 
-                   fastq1, fastq2)
+                   wf_files['paired_read1_fastq'],
+                   wf_files['paired_read2_fastq'])
+
+    # next step    
+    sortsam_job = sort_sam(sample_name, dax, software_tar, ref_files, wf_files)
+    dax.addJob(sortsam_job)
+    
     return j
 
 
-def sort_sam(software_file, sam, sorted_sam, sorted_index):
-    """step 2
-    java -Xmx22g -jar picard-tools-1.92/SortSam.jar CREATE_INDEX=TRUE
-    MAX_RECORDS_IN_RAM=5000000 TMP_DIR= /home/skhan/tmp/ I=$hash_files{'Sam'}
-    O=$hash_files{'Sorted_sam'} SO=coordinate VALIDATION_STRINGENCY=LENIENT;
-    """
-   
-    j = ComputeJob("picard-wrapper", cores = 1, mem_gb = 22, 
+def sort_sam(sample_name, dax, software_tar, ref_files, wf_files):
+
+    add_executable(dax, "sort_sam", "picard-wrapper")
+    j = ComputeJob("sort_sam", cores = 1, mem_gb = 22, 
                    partition = "largemem")
-    j.uses(software_file, link=Link.INPUT)
-    j.uses(sam, link=Link.INPUT)
-    j.uses(sorted_sam, link=Link.OUTPUT, transfer=False)
-    j.uses(sorted_index, link=Link.OUTPUT, transfer=False)
+    j.uses(software_tar, link=Link.INPUT)
+    j.uses(wf_files['sam'], link=Link.INPUT)
+    j.uses(wf_files['sorted_reads'], link=Link.OUTPUT, transfer=False)
+    j.uses(wf_files['sorted_index'], link=Link.OUTPUT, transfer=False)
     
     j.addArguments("SortSam.jar",
                    "CREATE_INDEX=TRUE",
                    "MAX_RECORDS_IN_RAM=5000000",
                    "TMP_DIR=.",
-                   "I=" + sam.name,
-                   "O=" + sorted_sam.name,
+                   "I=" + wf_files['sam'].name,
+                   "O=" + wf_files['sorted_reads'].name,
                    "SO=coordinate",
                    "VALIDATION_STRINGENCY=LENIENT")
+    
+    dedup_job = dedup(sample_name, dax, software_tar, ref_files, wf_files)
+    dax.addJob(dedup_job)
+    
     return j
 
 
-def dedup(software_file, sorted_reads, sorted_index,
-          deduped_reads, deduped_index, deduped_metrics):
-    """ step 3
-    java -Xmx22g -jar picard-tools-1.92/MarkDuplicates.jar CREATE_INDEX=TRUE
-    MAX_RECORDS_IN_RAM=5000000 TMP_DIR=/home/skhan/tmp/
-    I=$hash_files{'Sorted_sam'} O=$hash_files{'MarkDup'} METRICS_FILE=Duplicates_.$gtype
-    VALIDATION_STRINGENCY=LENIENT;
-    """
-   
-    j = ComputeJob("picard-wrapper", cores = 1, mem_gb = 22,
+def dedup(sample_name, dax, software_tar, ref_files, wf_files):
+    add_executable(dax, "dedup", "picard-wrapper")
+    j = ComputeJob("dedup", cores = 1, mem_gb = 22,
                    partition = "largemem")
-    j.uses(software_file, link=Link.INPUT)
-    j.uses(sorted_reads, link=Link.INPUT)
-    j.uses(sorted_index, link=Link.INPUT)
-    j.uses(deduped_reads, link=Link.OUTPUT, transfer=False)
-    j.uses(deduped_index, link=Link.OUTPUT, transfer=False)
-    j.uses(deduped_metrics, link=Link.OUTPUT, transfer=False)
+    j.uses(software_tar, link=Link.INPUT)
+    j.uses(wf_files['sorted_reads'], link=Link.INPUT)
+    j.uses(wf_files['sorted_index'], link=Link.INPUT)
+    j.uses(wf_files['deduped_reads'], link=Link.OUTPUT, transfer=False)
+    j.uses(wf_files['deduped_index'], link=Link.OUTPUT, transfer=False)
+    j.uses(wf_files['deduped_metrics'], link=Link.OUTPUT, transfer=False)
     
     j.addArguments("MarkDuplicates.jar",
                    "CREATE_INDEX=TRUE",
                    "MAX_RECORDS_IN_RAM=5000000",
                    "TMP_DIR=.",
-                   "I=" + sorted_reads.name,
-                   "O=" + deduped_reads.name,
-                   "METRICS_FILE=" + deduped_metrics.name,
+                   "I=" + wf_files['sorted_reads'].name,
+                   "O=" + wf_files['deduped_reads'].name,
+                   "METRICS_FILE=" + wf_files['deduped_metrics'].name,
                    "VALIDATION_STRINGENCY=LENIENT")
+
+    add_repl_job = add_replace(sample_name, dax, software_tar,
+                               ref_files, wf_files)
+    dax.addJob(add_repl_job)
+
     return j
 
 
-def add_replace(software_file, sample_name, 
-                deduped_reads, deduped_index, 
-                addrepl_reads, addrepl_index):
-    """ step 4
-    java -Xmx22g -jar picard-tools-1.92/AddOrReplaceReadGroups.jar
-    MAX_RECORDS_IN_RAM=5000000 TMP_DIR=/home/skhan/tmp/ I=$hash_files{'MarkDup'}
-    O=$hash_files{'AddOrRep'} RGID=$gtype LB=$gtype PL=\"Illumina\" SM=$gtype CN=BGI
-    RGPU=$gtype VALIDATION_STRINGENCY= LENIENT SORT_ORDER=coordinate
-    CREATE_INDEX=TRUE;
-    """
-   
-    j = ComputeJob("picard-wrapper", cores = 1, mem_gb = 22,
+def add_replace(sample_name, dax, software_tar, ref_files, wf_files):
+    add_executable(dax, "add_replace", "picard-wrapper")
+    j = ComputeJob("add_replace", cores = 1, mem_gb = 22,
                    partition = "largemem")
-    j.uses(software_file, link=Link.INPUT)
-    j.uses(deduped_reads, link=Link.INPUT)
-    j.uses(deduped_index, link=Link.INPUT)
-    j.uses(addrepl_reads, link=Link.OUTPUT, transfer=True)
-    j.uses(addrepl_index, link=Link.OUTPUT, transfer=True)
+    j.uses(software_tar, link=Link.INPUT)
+    j.uses(wf_files['deduped_reads'], link=Link.INPUT)
+    j.uses(wf_files['deduped_index'], link=Link.INPUT)
+    j.uses(wf_files['addrepl_reads'], link=Link.OUTPUT, transfer=True)
+    j.uses(wf_files['addrepl_index'], link=Link.OUTPUT, transfer=True)
     
     j.addArguments("AddOrReplaceReadGroups.jar",
                    "MAX_RECORDS_IN_RAM=5000000",
                    "TMP_DIR=.",
-                   "I=" + deduped_reads.name,
-                   "O=" + addrepl_reads.name,
+                   "I=" + wf_files['deduped_reads'].name,
+                   "O=" + wf_files['addrepl_reads'].name,
                    "RGID=" + sample_name,
                    "LB=" + sample_name,
                    "PL=\"Illumina\"",
@@ -535,202 +444,191 @@ def add_replace(software_file, sample_name,
                    "VALIDATION_STRINGENCY=LENIENT",
                    "SORT_ORDER=coordinate",
                    "CREATE_INDEX=TRUE")
+    
+    realign_job = realign_target_creator(sample_name, dax, software_tar,
+                                         ref_files, wf_files)
+    dax.addJob(realign_job)
+    
     return j
 
 
-def realign_target_creator(software_file, ref_files,
-                           addrepl_reads, addrepl_index, intervals):
-    """ step 5
-    java -Xmx10g -jar GATK/GenomeAnalysisTK.jar -T RealignerTargetCreator -R
-    Soybean_ref_genome.fasta -I $hash_files{'AddOrRep'} -o $hash_files{'intervals'} --
-    fix_misencoded_quality_scores
-
-    """
-   
-    j = ComputeJob("gatk-wrapper", cores = 1, mem_gb = 10,
+def realign_target_creator(sample_name, dax, software_tar, ref_files, wf_files):
+    add_executable(dax, "realign_target_creator", "gatk-wrapper")
+    j = ComputeJob("realign_target_creator", cores = 16, mem_gb = 10,
                    partition = "largemem")
-    j.uses(software_file, link=Link.INPUT)
+    j.uses(software_tar, link=Link.INPUT)
     for f in ref_files:
         j.uses(f, link=Link.INPUT)
-    j.uses(addrepl_reads, link=Link.INPUT)
-    j.uses(addrepl_index, link=Link.INPUT)
-    j.uses(intervals, link=Link.OUTPUT, transfer=False)
+    j.uses(wf_files['addrepl_reads'], link=Link.INPUT)
+    j.uses(wf_files['addrepl_index'], link=Link.INPUT)
+    j.uses(wf_files['intervals'], link=Link.OUTPUT, transfer=False)
     
     j.addArguments("-T", "RealignerTargetCreator",
+                   "-nt", "16",
                    "-R", extract_fasta_basefile(ref_files),
-                   "-I", addrepl_reads,
-                   "-o", intervals) 
+                   "-I", wf_files['addrepl_reads'],
+                   "-o", wf_files['intervals']) 
+    
+    indel_realign_job = indel_realign(sample_name, dax, software_tar,
+                                      ref_files, wf_files)
+    dax.addJob(indel_realign_job)
+    
     return j
 
 
-def indel_realign(software_file, ref_files,
-                  addrepl_reads, addrepl_index, intervals,
-                  indel_realigned_reads, indel_realigned_index):
-    """ step 6
-    java -Xmx10g -jar GATK/GenomeAnalysisTK.jar -T IndelRealigner -R
-    Soybean_ref_genome.fasta -I $hash_files{'AddOrRep'} -targetIntervals $hash_files{'intervals'}
-    -o $hash_files{'Indelrealign'} --fix_misencoded_quality_scores;
-    """
-   
-    j = ComputeJob("gatk-wrapper", cores = 1, mem_gb = 10,
+def indel_realign(sample_name, dax, software_tar, ref_files, wf_files):
+    # IndelRealigner can only be run single threaded
+    add_executable(dax, "indel_realign", "gatk-wrapper")   
+    j = ComputeJob("indel_realign", cores = 1, mem_gb = 10,
                    partition = "largemem")
-    j.uses(software_file, link=Link.INPUT)
+    j.uses(software_tar, link=Link.INPUT)
     for f in ref_files:
         j.uses(f, link=Link.INPUT)
-    j.uses(addrepl_reads, link=Link.INPUT)
-    j.uses(addrepl_index, link=Link.INPUT)
-    j.uses(intervals, link=Link.INPUT)
-    j.uses(indel_realigned_reads, link=Link.OUTPUT, transfer=True)
-    j.uses(indel_realigned_index, link=Link.OUTPUT, transfer=True)
+    j.uses(wf_files['addrepl_reads'], link=Link.INPUT)
+    j.uses(wf_files['addrepl_index'], link=Link.INPUT)
+    j.uses(wf_files['intervals'], link=Link.INPUT)
+    j.uses(wf_files['indel_realigned_reads'], link=Link.OUTPUT, transfer=True)
+    j.uses(wf_files['indel_realigned_index'], link=Link.OUTPUT, transfer=True)
     
     j.addArguments("-T", "IndelRealigner",
                    "-R", extract_fasta_basefile(ref_files),
-                   "-I", addrepl_reads,
-                   "-targetIntervals", intervals,
-                   "-o", indel_realigned_reads,
-                   "--fix_misencoded_quality_scores")
-    return j
-
-
-def base_recalibrator(software_file, ref_files,
-                      indel_realigned_reads, indel_realigned_index,
-                      intervals, bqsr, plot):
-    """ step 7
-    java -Xmx10g -jar GATK/GenomeAnalysisTK.jar -T BaseRecalibrator -I
-    $hash_files{'Indelrealign'} -R Soybean_ref_genome.fasta -
-    run_without_dbsnp_potentially_ruining_quality -o $hash_files{'bqsr'} -plots
-    $hash_files{'plot'};
-    """
-   
-    j = ComputeJob("gatk-wrapper", cores = 1, mem_gb = 10,
-                   partition = "largemem")
-    j.uses(software_file, link=Link.INPUT)
-    for f in ref_files:
-        j.uses(f, link=Link.INPUT)
-    j.uses(indel_realigned_reads, link=Link.INPUT)
-    j.uses(indel_realigned_index, link=Link.INPUT)
-    j.uses(intervals, link=Link.INPUT)
-    j.uses(bqsr, link=Link.OUTPUT, transfer=True)
-    j.uses(plot, link=Link.OUTPUT, transfer=True)
+                   "-I", wf_files['addrepl_reads'],
+                   "-targetIntervals", wf_files['intervals'],
+                   "-o", wf_files['indel_realigned_reads'])
     
-    j.addArguments("-T", "BaseRecalibrator",
-                   "-l", "DEBUG",
-                   "-R", extract_fasta_basefile(ref_files),
-                   "-I", indel_realigned_reads,
-                   "-run_without_dbsnp_potentially_ruining_quality",
-                   "-o", bqsr,
-                   "-plots", plot)
-    return j
-
-
-def base_recalibrator_2(software_file, ref_files,
-                        indel_realigned_reads, indel_realigned_index,
-                        bqsr, recalib_bqsr, recalib_plot):
-    """ step 8
-    java -Xmx10g -jar GATK/GenomeAnalysisTK.jar -T BaseRecalibrator -I
-    $hash_files{'Indelrealign'} -R Soybean_ref_genome.fasta -
-    run_without_dbsnp_potentially_ruining_quality -BQSR $hash_files{'bqsr'} -o
-    $hash_files{'recalib_bqsr'} -plots $hash_files{'recalib_plot'};
-    """
-   
-    j = ComputeJob("gatk-wrapper", cores = 1, mem_gb = 10,
-                   partition = "largemem")
-    j.uses(software_file, link=Link.INPUT)
-    for f in ref_files:
-        j.uses(f, link=Link.INPUT)
-    j.uses(indel_realigned_reads, link=Link.INPUT)
-    j.uses(indel_realigned_index, link=Link.INPUT)
-    j.uses(bqsr, link=Link.INPUT)
-    j.uses(recalib_bqsr, link=Link.OUTPUT, transfer=True)
-    j.uses(recalib_plot, link=Link.OUTPUT, transfer=True)
+    reduce_reads_job = reduce_reads(sample_name, dax, software_tar, ref_files, wf_files)
+    dax.addJob(reduce_reads_job)
     
-    j.addArguments("-T", "BaseRecalibrator",
-                   "-R", extract_fasta_basefile(ref_files),
-                   "-I", indel_realigned_reads,
-                   "-run_without_dbsnp_potentially_ruining_quality",
-                   "-BQSR", bqsr,
-                   "-o", recalib_bqsr,
-                   "-plots", recalib_plot)
     return j
 
 
-def print_reads(software_file, ref_files,
-                indel_realigned_reads, indel_realigned_index, bqsr,
-                print_reads_file, print_index_file):
-    """ step 9
-    java -Xmx10g -jar GATK/GenomeAnalysisTK.jar -T PrintReads -R Soybean_ref_genome.fasta -I
-    $hash_files{'Indelrealign'} -BQSR $hash_files{'bqsr'} -o $hash_files{'PrintReads'};
-    """
-   
-    j = ComputeJob("gatk-wrapper", cores = 1, mem_gb = 10,
+
+def reduce_reads(sample_name, dax, software_tar, ref_files, wf_files):
+    add_executable(dax, "reduce_reads", "gatk-wrapper")
+    j = ComputeJob("reduce_reads", cores = 16, mem_gb = 10,
                    partition = "largemem")
-    j.uses(software_file, link=Link.INPUT)
+    j.uses(software_tar, link=Link.INPUT)
     for f in ref_files:
         j.uses(f, link=Link.INPUT)
-    j.uses(indel_realigned_reads, link=Link.INPUT)
-    j.uses(indel_realigned_index, link=Link.INPUT)
-    j.uses(bqsr, link=Link.INPUT)
-    j.uses(print_reads_file, link=Link.OUTPUT, transfer=True)
-    j.uses(print_index_file, link=Link.OUTPUT, transfer=True)
-    
-    j.addArguments("-T", "PrintReads",
-                   "-R", extract_fasta_basefile(ref_files),
-                   "-I", indel_realigned_reads,
-                   "-BQSR", bqsr,
-                   "-o", print_reads_file)
-    return j
-
-
-def reduce_reads(software_file, ref_files,
-                 input_reads_file, input_index_file,
-                 reduced_reads_file, reduced_index_file):
-    """ step 10
-    java -Xmx10g -Djava.io.tmpdir=/home/skhan/tmp -jar GATK/GenomeAnalysisTK.jar -T
-    ReduceReads -R Soybean_ref_genome.fasta -I $hash_files{'PrintReads'} -o
-    $hash_files{'ReduceReads'};
-    """
-   
-    j = ComputeJob("gatk-wrapper", cores = 1, mem_gb = 10,
-                   partition = "largemem")
-    j.uses(software_file, link=Link.INPUT)
-    for f in ref_files:
-        j.uses(f, link=Link.INPUT)
-    j.uses(input_reads_file, link=Link.INPUT)
-    j.uses(input_index_file, link=Link.INPUT)
-    j.uses(reduced_reads_file, link=Link.OUTPUT, transfer=True)
-    j.uses(reduced_index_file, link=Link.OUTPUT, transfer=True)
+    j.uses(wf_files['indel_realigned_reads'], link=Link.INPUT)
+    j.uses(wf_files['indel_realigned_index'], link=Link.INPUT)
+    j.uses(wf_files['reduced_reads'], link=Link.OUTPUT, transfer=True)
+    j.uses(wf_files['reduced_index'], link=Link.OUTPUT, transfer=True)
     
     j.addArguments("-T", "ReduceReads",
+                   "-nt", "16",
                    "-R", extract_fasta_basefile(ref_files),
-                   "-I", input_reads_file,
-                   "-o", reduced_reads_file)
+                   "-I", wf_files['indel_realigned_reads'],
+                   "-o", wf_files['reduced_reads'])
     return j
 
 
-def unified_genotyper(software_file, ref_files,
-                      reduced_reads_file, reduced_index_file,
-                      unified_genotyper_file, unified_genotyper_index):
-    """ step 11
-    java -Xmx10g -Djava.io.tmpdir=/home/skhan/tmp -jar GATK/GenomeAnalysisTK.jar -T
-    UnifiedGenotyper -R Soybean_ref_genome.fasta -I $hash_files{'ReduceReads'} -o
-    $hash_files{'UnifiedGenotyper'};
-    """
-   
-    j = ComputeJob("gatk-wrapper", cores = 1, mem_gb = 10,
+def unified_genotyper_snp(dax, software_file, ref_files, wf_files, input_files):
+        
+    add_executable(dax, "unified_genotyper_snp", "gatk-wrapper")    
+    j = ComputeJob("unified_genotyper_snp", cores = 16, mem_gb = 10,
                    partition = "largemem_uni")
+    
+    # inputs
     j.uses(software_file, link=Link.INPUT)
     for f in ref_files:
         j.uses(f, link=Link.INPUT)
-    j.uses(reduced_reads_file, link=Link.INPUT)
-    j.uses(reduced_index_file, link=Link.INPUT)
-    j.uses(unified_genotyper_file, link=Link.OUTPUT, transfer=True)
-    j.uses(unified_genotyper_index, link=Link.OUTPUT, transfer=True)
+    for f in input_files:
+        j.uses(f, link=Link.INPUT)
+    j.uses(wf_files['reduced_reads_list'], link=Link.INPUT)
+
+    # outputs
+    wf_files["raw_snp_vcf"] = File("raw_snp.vcf")
+    j.uses(wf_files["raw_snp_vcf"], link=Link.OUTPUT, transfer=True)
     
     j.addArguments("-T", "UnifiedGenotyper",
+                   "-nt", "16",
                    "-R", extract_fasta_basefile(ref_files),
-                   "-I", reduced_reads_file,
-                   "-o", unified_genotyper_file)
+                   "-glm", "SNP",
+                   "-I", wf_files["reduced_reads_list"],
+                   "-o", wf_files["raw_snp_vcf"])
     return j
+
+
+def unified_genotyper_indel(dax, software_file, ref_files, wf_files, input_files):
+
+    add_executable(dax, "unified_genotyper_indel", "gatk-wrapper")    
+    j = ComputeJob("unified_genotyper_indel", cores = 16, mem_gb = 10,
+                   partition = "largemem_uni")
+    
+    # inputs
+    j.uses(software_file, link=Link.INPUT)
+    for f in ref_files:
+        j.uses(f, link=Link.INPUT)
+    for f in input_files:
+        j.uses(f, link=Link.INPUT)
+    j.uses(wf_files['reduced_reads_list'], link=Link.INPUT)
+
+    # outputs
+    wf_files["raw_indel_vcf"] = File("raw_indel.vcf")
+    j.uses(wf_files["raw_indel_vcf"], link=Link.OUTPUT, transfer=True)
+    
+    
+    j.addArguments("-T", "UnifiedGenotyper",
+                   "-nt", "16",
+                   "-R", extract_fasta_basefile(ref_files),
+                   "-glm", "INDEL",
+                   "-I", wf_files["reduced_reads_list"],
+                   "-o", wf_files["raw_indel_vcf"])
+    return j
+
+
+def filtering_snp(dax, software_file, ref_files, wf_files):
+        
+    add_executable(dax, "filtering_snp", "gatk-wrapper")    
+    j = ComputeJob("filtering_snp", cores = 16, mem_gb = 10,
+                   partition = "largemem_uni")
+    
+    # inputs
+    j.uses(software_file, link=Link.INPUT)
+    for f in ref_files:
+        j.uses(f, link=Link.INPUT)
+    j.uses(wf_files['raw_snp_vcf'], link=Link.INPUT)
+
+    # outputs
+    wf_files["filtered_snp_vcf"] = File("filtered_snp.vcf")
+    j.uses(wf_files["filtered_snp_vcf"], link=Link.OUTPUT, transfer=True)
+    
+    j.addArguments("-T", "VariantFiltration",
+                   "-nt", "16",
+                   "-R", extract_fasta_basefile(ref_files),
+                   "-V", wf_files['raw_snp_vcf'],
+                   "--filterExpression", "'QD < 2.0 || FS > 60.0 || MQ < 40.0'",
+                   "--filterName", "my_snp_filter",
+                   "-o", wf_files["filtered_snp_vcf"])
+    return j
+
+
+def filtering_indel(dax, software_file, ref_files, wf_files):
+    
+    add_executable(dax, "filtering_indel", "gatk-wrapper")    
+    j = ComputeJob("filtering_indel", cores = 16, mem_gb = 10,
+                   partition = "largemem_uni")
+    
+    # inputs
+    j.uses(software_file, link=Link.INPUT)
+    for f in ref_files:
+        j.uses(f, link=Link.INPUT)
+    j.uses(wf_files['raw_indel_vcf'], link=Link.INPUT)
+
+    # outputs
+    wf_files["filtered_indel_vcf"] = File("filtered_indel.vcf")
+    j.uses(wf_files["filtered_indel_vcf"], link=Link.OUTPUT, transfer=True)
+    
+    j.addArguments("-T", "VariantFiltration",
+                   "-nt", "16",
+                   "-R", extract_fasta_basefile(ref_files),
+                   "-V", wf_files['raw_indel_vcf'],
+                   "--filterExpression", "'QD < 2.0 || ReadPosRankSum < -20.0 || InbreedingCoeff < -0.8 || FS > 200.0'",
+                   "--filterName", "my_indel_filter",
+                   "-o", wf_files["filtered_indel_vcf"])
+    return j
+        
 
 
 def haplotype_caller(software_file, ref_files,
@@ -757,7 +655,6 @@ def haplotype_caller(software_file, ref_files,
                    "-I", reduced_reads,
                    "-o", haplotype_caller_reads)
     return j
-
 
 
 def main():

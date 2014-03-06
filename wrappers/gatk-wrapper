@@ -18,7 +18,7 @@ EXITCODE=$?
 
 if [ "x$EXITCODE" != "x0" ]; then
     # RealignerTargetCreator might need a second pass with different options 
-    if (echo "$@" | grep RealignerTargetCreator) >/dev/null 2>&1; then
+    #if (echo "$@" | grep RealignerTargetCreator) >/dev/null 2>&1; then
         if (cat $OUTFILE | grep -E "extremely high quality score|wrong encoding") >/dev/null 2>&1; then
             cat $OUTFILE
             echo
@@ -30,7 +30,7 @@ if [ "x$EXITCODE" != "x0" ]; then
                  >$OUTFILE 2>&1
             EXITCODE=$?
         fi
-    fi
+    #fi
 fi
 
 cat $OUTFILE
