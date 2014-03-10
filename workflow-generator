@@ -3,6 +3,7 @@
 from AutoADAG import *
 import ConfigParser
 from Pegasus.DAX3 import *
+import getpass
 import logging
 import math
 import optparse
@@ -13,6 +14,7 @@ import string
 import subprocess
 import sys
 import time
+
 
 
 # to setup python lib dir for importing Pegasus PYTHON DAX API
@@ -182,6 +184,12 @@ def read_input_lists(ref_urls, fastq_urls):
 def extract_lfn(url):
     """ determine a logical file name (basename) from a given URL """
     return re.sub(".*/", "", url)
+
+
+def local_pfn(path):
+    """ generates a full pfn given a local path """
+    pfn = "scp://" + getpass.getuser() + "@" + socket.gethostname() + "/" + path
+    return pfn
   
 
 def extract_fasta_basefile(file_list):
@@ -223,8 +231,7 @@ def generate_dax():
 
     # we need to bring a copy of the software with us
     software_tar = File("software.tar.gz")
-    software_tar.addPFN(PFN("scp://" + socket.gethostname() + \
-               conf.get("local", "work_dir") + "/software.tar.gz", "local"))
+    software_tar.addPFN(PFN(local_pfn(conf.get("local", "work_dir") + "/software.tar.gz"), "local"))
     dax.addFile(software_tar)    
     add_executable(dax, "software-wrapper", "software-wrapper")
     software_job = ComputeJob("software-wrapper", cores=1, mem_gb=1)
@@ -288,10 +295,10 @@ def generate_dax():
 
     # build the bam file list required by the genotyper
     wf_files['reduced_reads_list'] = File('reduced_reads.list')
-    pfn = conf.get("local", "work_dir") + "/" + wf_files['reduced_reads_list'].name
-    wf_files['reduced_reads_list'].addPFN(PFN(pfn, "local"))
+    path = conf.get("local", "work_dir") + "/" + wf_files['reduced_reads_list'].name
+    wf_files['reduced_reads_list'].addPFN(PFN(local_pfn(path), "local"))
     dax.addFile(wf_files['reduced_reads_list'])
-    lf = open(pfn, "w")
+    lf = open(path, "w")
     for f in genotyper_inputs:
         if re.search("(.bam)$", f.name):
             lf.write("" + f.name + "\n")
@@ -322,8 +329,7 @@ def add_executable(dax, logical_name, wrapper_name):
     if logical_name in added_execs:
         return
 
-    base_url = "scp://" + socket.gethostname() + \
-               conf.get("local", "top_dir")    
+    base_url = local_pfn(conf.get("local", "top_dir"))    
     
     wrapper = Executable(name=logical_name, 
                          arch="x86_64",
@@ -402,7 +408,7 @@ def dedup(sample_name, dax, software_tar, ref_files, wf_files):
     j.uses(wf_files['sorted_index'], link=Link.INPUT)
     j.uses(wf_files['deduped_reads'], link=Link.OUTPUT, transfer=False)
     j.uses(wf_files['deduped_index'], link=Link.OUTPUT, transfer=False)
-    j.uses(wf_files['deduped_metrics'], link=Link.OUTPUT, transfer=False)
+    #j.uses(wf_files['deduped_metrics'], link=Link.OUTPUT, transfer=False)
     
     j.addArguments("MarkDuplicates.jar",
                    "CREATE_INDEX=TRUE",
@@ -505,7 +511,7 @@ def indel_realign(sample_name, dax, software_tar, ref_files, wf_files):
 
 def reduce_reads(sample_name, dax, software_tar, ref_files, wf_files):
     add_executable(dax, "reduce_reads", "gatk-wrapper")
-    j = ComputeJob("reduce_reads", cores = 16, mem_gb = 10,
+    j = ComputeJob("reduce_reads", cores = 1, mem_gb = 10,
                    partition = "largemem")
     j.uses(software_tar, link=Link.INPUT)
     for f in ref_files:
@@ -516,7 +522,6 @@ def reduce_reads(sample_name, dax, software_tar, ref_files, wf_files):
     j.uses(wf_files['reduced_index'], link=Link.OUTPUT, transfer=True)
     
     j.addArguments("-T", "ReduceReads",
-                   "-nt", "16",
                    "-R", extract_fasta_basefile(ref_files),
                    "-I", wf_files['indel_realigned_reads'],
                    "-o", wf_files['reduced_reads'])
@@ -581,7 +586,7 @@ def unified_genotyper_indel(dax, software_file, ref_files, wf_files, input_files
 def filtering_snp(dax, software_file, ref_files, wf_files):
         
     add_executable(dax, "filtering_snp", "gatk-wrapper")    
-    j = ComputeJob("filtering_snp", cores = 16, mem_gb = 10,
+    j = ComputeJob("filtering_snp", cores = 1, mem_gb = 10,
                    partition = "largemem_uni")
     
     # inputs
@@ -595,7 +600,6 @@ def filtering_snp(dax, software_file, ref_files, wf_files):
     j.uses(wf_files["filtered_snp_vcf"], link=Link.OUTPUT, transfer=True)
     
     j.addArguments("-T", "VariantFiltration",
-                   "-nt", "16",
                    "-R", extract_fasta_basefile(ref_files),
                    "-V", wf_files['raw_snp_vcf'],
                    "--filterExpression", "'QD < 2.0 || FS > 60.0 || MQ < 40.0'",
@@ -607,7 +611,7 @@ def filtering_snp(dax, software_file, ref_files, wf_files):
 def filtering_indel(dax, software_file, ref_files, wf_files):
     
     add_executable(dax, "filtering_indel", "gatk-wrapper")    
-    j = ComputeJob("filtering_indel", cores = 16, mem_gb = 10,
+    j = ComputeJob("filtering_indel", cores = 1, mem_gb = 10,
                    partition = "largemem_uni")
     
     # inputs
@@ -621,7 +625,6 @@ def filtering_indel(dax, software_file, ref_files, wf_files):
     j.uses(wf_files["filtered_indel_vcf"], link=Link.OUTPUT, transfer=True)
     
     j.addArguments("-T", "VariantFiltration",
-                   "-nt", "16",
                    "-R", extract_fasta_basefile(ref_files),
                    "-V", wf_files['raw_indel_vcf'],
                    "--filterExpression", "'QD < 2.0 || ReadPosRankSum < -20.0 || InbreedingCoeff < -0.8 || FS > 200.0'",
@@ -731,7 +734,7 @@ def main():
           " --conf " + conf.get("local", "top_dir") + \
           "/conf/" + conf.get("local", "exec_env") + "/pegasus.conf" + \
           " --dir ." + \
-          " --sites execution"
+          " --sites execution --nocleanup"
     
     if conf.get("exec_environment", "output_site") != "":
         cmd += " --output-site " + conf.get("exec_environment", "output_site")
