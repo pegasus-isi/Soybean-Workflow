@@ -146,6 +146,7 @@ def generate_site_catalog():
     outf = open(conf.get("local", "work_dir") + "/sites.catalog", "w")
     outf.write(template.substitute(
                         submit_host = socket.gethostname(),
+                        username = getpass.getuser(), 
                         home = os.path.expanduser('~'),
                         top_dir = conf.get("local", "top_dir"),
                         work_dir = conf.get("local", "work_dir"),

@@ -30,8 +30,8 @@
         </directory>
     </site>
     <site  handle="isi_workflow" arch="x86_64" os="LINUX">
-        <directory type="local-storage" path="/local-scratch/1-month-auto-purge/outputs">
-            <file-server operation="all" url="gsiftp://obelix.isi.edu/local-scratch/1-month-auto-purge/outputs"/>
+        <directory type="local-storage" path="/local-scratch/1-month-auto-purge/outputs/$username">
+            <file-server operation="all" url="gsiftp://workflow.isi.edu/local-scratch/1-month-auto-purge/outputs/$username"/>
         </directory>
     </site>
 </sitecatalog>
