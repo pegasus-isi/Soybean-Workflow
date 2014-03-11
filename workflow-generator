@@ -355,9 +355,7 @@ def alignment_to_reference(sample_name, dax, software_tar, ref_files, wf_files):
     j.uses(software_tar, link=Link.INPUT)
     j.uses(wf_files['paired_read1_fastq'], link=Link.INPUT)
     j.uses(wf_files['paired_read2_fastq'], link=Link.INPUT)
-    #j.uses(wf_files['sam'], link=Link.OUTPUT, transfer=False)
-    # temp store the output file
-    j.uses(wf_files['sam'], link=Link.OUTPUT, transfer=True)
+    j.uses(wf_files['sam'], link=Link.OUTPUT, transfer=False)
     
     j.setStdout(wf_files['sam'])
     
@@ -679,12 +677,13 @@ def main():
         sys.exit(1)
 
     # read the config file and add those settings to the option object
-    conf = ConfigParser.ConfigParser()
+    conf = ConfigParser.SafeConfigParser({'username': getpass.getuser()})
     r = conf.read(["conf/local.conf", "conf/%s/site.conf" % options.exec_env])
     if len(r) != 2:
         logger.fatal("Unable to read configuration files for that environment")
         sys.exit(1)
 
+    conf.set("local", "username", getpass.getuser())
     conf.set("local", "exec_env", options.exec_env)
     conf.set("local", "top_dir", os.path.dirname(os.path.realpath( __file__ )))
 
@@ -734,7 +733,7 @@ def main():
           " --conf " + conf.get("local", "top_dir") + \
           "/conf/" + conf.get("local", "exec_env") + "/pegasus.conf" + \
           " --dir ." + \
-          " --sites execution --nocleanup"
+          " --sites execution"
     
     if conf.get("exec_environment", "output_site") != "":
         cmd += " --output-site " + conf.get("exec_environment", "output_site")

@@ -17,8 +17,8 @@
         <profile namespace="env" key="PATH">$irods_bin:/usr/bin:/bin</profile>
     </site>
     <site  handle="staging" arch="x86_64" os="LINUX">
-        <directory type="shared-scratch" path="/data/scratch-purge-no-backups">
-            <file-server operation="all" url="gsiftp://obelix.isi.edu/data/scratch-purge-no-backups"/>
+        <directory type="shared-scratch" path="/local-scratch/1-month-auto-purge/scratch">
+            <file-server operation="all" url="gsiftp://workflow.isi.edu/local-scratch/1-month-auto-purge/scratch"/>
         </directory>
     </site>
     <site  handle="irods_iplant" arch="x86_64" os="LINUX">
@@ -29,9 +29,9 @@
             <file-server operation="all" url="gsiftp://osg-xsede.grid.iu.edu/local-scratch/public_html/rynge/soybean/outputs"/>
         </directory>
     </site>
-    <site  handle="isi_obelix" arch="x86_64" os="LINUX">
-        <directory type="local-storage" path="/data/scratch-purge-no-backups/outputs">
-            <file-server operation="all" url="gsiftp://obelix.isi.edu/data/scratch-purge-no-backups/outputs"/>
+    <site  handle="isi_workflow" arch="x86_64" os="LINUX">
+        <directory type="local-storage" path="/local-scratch/1-month-auto-purge/outputs">
+            <file-server operation="all" url="gsiftp://obelix.isi.edu/local-scratch/1-month-auto-purge/outputs"/>
         </directory>
     </site>
 </sitecatalog>
