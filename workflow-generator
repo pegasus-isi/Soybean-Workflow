@@ -215,7 +215,7 @@ def generate_dax():
     
     logger.info("Generating abstract workflow (DAX)")
     
-    dax = AutoADAG("pipeline")
+    dax = AutoADAG("soykb")
         
     # email notificiations for when the state of the workflow changes
     dax.invoke('all',  conf.get("local", "pegasus_bin") +
@@ -277,8 +277,6 @@ def generate_dax():
         wf_files['intervals'] = File(sample_name + "_intervals.list")
         wf_files['indel_realigned_reads'] = File(sample_name + "_indel_realigned.bam")
         wf_files['indel_realigned_index'] = File(sample_name + "_indel_realigned.bai")
-        wf_files['reduced_reads'] = File(sample_name + "_reduced_reads.bam")
-        wf_files['reduced_index'] = File(sample_name + "_reduced_reads.bai")
     
         # Step 1 - dependent jobs are now added in the parent jobs
         align_job = alignment_to_reference(sample_name,
@@ -290,29 +288,32 @@ def generate_dax():
         dax.depends(parent=software_job, child=align_job)
 
         # keep a list of the files needed for the combined genotyper
-        genotyper_inputs.append(wf_files['reduced_reads'])
-        genotyper_inputs.append(wf_files['reduced_index'])
+        genotyper_inputs.append(wf_files['indel_realigned_reads'])
+        genotyper_inputs.append(wf_files['indel_realigned_index'])
 
 
     # build the bam file list required by the genotyper
-    wf_files['reduced_reads_list'] = File('reduced_reads.list')
-    path = conf.get("local", "work_dir") + "/" + wf_files['reduced_reads_list'].name
-    wf_files['reduced_reads_list'].addPFN(PFN(local_pfn(path), "local"))
-    dax.addFile(wf_files['reduced_reads_list'])
+    wf_files['multisample_list'] = File('multisample.list')
+    path = conf.get("local", "work_dir") + "/" + wf_files['multisample_list'].name
+    wf_files['multisample_list'].addPFN(PFN(local_pfn(path), "local"))
+    dax.addFile(wf_files['multisample_list'])
     lf = open(path, "w")
     for f in genotyper_inputs:
         if re.search("(.bam)$", f.name):
             lf.write("" + f.name + "\n")
     lf.close()
 
-    u_snp_job = unified_genotyper_snp(dax, software_tar, ref_files, wf_files, genotyper_inputs)
-    dax.addJob(u_snp_job)
+    ug_job = unified_genotyper(dax, software_tar, ref_files, wf_files, genotyper_inputs)
+    dax.addJob(ug_job)
+
+    snp_select_job = select_variants_snp(dax, software_tar, ref_files, wf_files)
+    dax.addJob(snp_select_job)
 
     snp_filter_job = filtering_snp(dax, software_tar, ref_files, wf_files)
     dax.addJob(snp_filter_job)
 
-    u_indel_job = unified_genotyper_indel(dax, software_tar, ref_files, wf_files, genotyper_inputs)
-    dax.addJob(u_indel_job)
+    indel_select_job = select_variants_indel(dax, software_tar, ref_files, wf_files)
+    dax.addJob(indel_select_job)
 
     indel_filter_job = filtering_indel(dax, software_tar, ref_files, wf_files)
     dax.addJob(indel_filter_job)
@@ -500,37 +501,14 @@ def indel_realign(sample_name, dax, software_tar, ref_files, wf_files):
                    "-I", wf_files['addrepl_reads'],
                    "-targetIntervals", wf_files['intervals'],
                    "-o", wf_files['indel_realigned_reads'])
-    
-    reduce_reads_job = reduce_reads(sample_name, dax, software_tar, ref_files, wf_files)
-    dax.addJob(reduce_reads_job)
-    
+     
     return j
 
 
-
-def reduce_reads(sample_name, dax, software_tar, ref_files, wf_files):
-    add_executable(dax, "reduce_reads", "gatk-wrapper")
-    j = ComputeJob("reduce_reads", cores = 1, mem_gb = 10,
-                   partition = "largemem")
-    j.uses(software_tar, link=Link.INPUT)
-    for f in ref_files:
-        j.uses(f, link=Link.INPUT)
-    j.uses(wf_files['indel_realigned_reads'], link=Link.INPUT)
-    j.uses(wf_files['indel_realigned_index'], link=Link.INPUT)
-    j.uses(wf_files['reduced_reads'], link=Link.OUTPUT, transfer=True)
-    j.uses(wf_files['reduced_index'], link=Link.OUTPUT, transfer=True)
-    
-    j.addArguments("-T", "ReduceReads",
-                   "-R", extract_fasta_basefile(ref_files),
-                   "-I", wf_files['indel_realigned_reads'],
-                   "-o", wf_files['reduced_reads'])
-    return j
-
-
-def unified_genotyper_snp(dax, software_file, ref_files, wf_files, input_files):
+def unified_genotyper(dax, software_file, ref_files, wf_files, input_files):
         
-    add_executable(dax, "unified_genotyper_snp", "gatk-wrapper")    
-    j = ComputeJob("unified_genotyper_snp", cores = 16, mem_gb = 10,
+    add_executable(dax, "unified_genotyper", "gatk-wrapper")    
+    j = ComputeJob("unified_genotyper", cores = 16, mem_gb = 10,
                    partition = "largemem_uni")
     
     # inputs
@@ -539,46 +517,67 @@ def unified_genotyper_snp(dax, software_file, ref_files, wf_files, input_files):
         j.uses(f, link=Link.INPUT)
     for f in input_files:
         j.uses(f, link=Link.INPUT)
-    j.uses(wf_files['reduced_reads_list'], link=Link.INPUT)
+    j.uses(wf_files['multisample_list'], link=Link.INPUT)
 
     # outputs
-    wf_files["raw_snp_vcf"] = File("raw_snp.vcf")
-    j.uses(wf_files["raw_snp_vcf"], link=Link.OUTPUT, transfer=True)
+    wf_files["unified_genotyper_vcf"] = File("unified_genotyper.vcf")
+    j.uses(wf_files["unified_genotyper_vcf"], link=Link.OUTPUT, transfer=True)
     
     j.addArguments("-T", "UnifiedGenotyper",
                    "-nt", "16",
                    "-R", extract_fasta_basefile(ref_files),
-                   "-glm", "SNP",
-                   "-I", wf_files["reduced_reads_list"],
-                   "-o", wf_files["raw_snp_vcf"])
+                   "-I", wf_files["multisample_list"],
+                   "-o", wf_files["unified_genotyper_vcf"])
     return j
 
 
-def unified_genotyper_indel(dax, software_file, ref_files, wf_files, input_files):
-
-    add_executable(dax, "unified_genotyper_indel", "gatk-wrapper")    
-    j = ComputeJob("unified_genotyper_indel", cores = 16, mem_gb = 10,
+def select_variants_snp(dax, software_file, ref_files, wf_files):
+        
+    add_executable(dax, "select_variants_snp", "gatk-wrapper")    
+    j = ComputeJob("select_variants_snp", cores = 16, mem_gb = 10,
                    partition = "largemem_uni")
     
     # inputs
     j.uses(software_file, link=Link.INPUT)
     for f in ref_files:
         j.uses(f, link=Link.INPUT)
-    for f in input_files:
-        j.uses(f, link=Link.INPUT)
-    j.uses(wf_files['reduced_reads_list'], link=Link.INPUT)
+    j.uses(wf_files['unified_genotyper_vcf'], link=Link.INPUT)
 
     # outputs
-    wf_files["raw_indel_vcf"] = File("raw_indel.vcf")
-    j.uses(wf_files["raw_indel_vcf"], link=Link.OUTPUT, transfer=True)
+    wf_files["snp_only_vcf"] = File("snp_only.vcf")
+    j.uses(wf_files["snp_only_vcf"], link=Link.OUTPUT, transfer=True)
     
-    
-    j.addArguments("-T", "UnifiedGenotyper",
+    j.addArguments("-T", "SelectVariants",
                    "-nt", "16",
                    "-R", extract_fasta_basefile(ref_files),
-                   "-glm", "INDEL",
-                   "-I", wf_files["reduced_reads_list"],
-                   "-o", wf_files["raw_indel_vcf"])
+                   "-selectType", "SNP",
+                   "-V", wf_files["unified_genotyper_vcf"],
+                   "-o", wf_files["snp_only_vcf"])
+    return j
+
+
+def select_variants_indel(dax, software_file, ref_files, wf_files):
+        
+    add_executable(dax, "select_variants_indel", "gatk-wrapper")    
+    j = ComputeJob("select_variants_indel", cores = 16, mem_gb = 10,
+                   partition = "largemem_uni")
+    
+    # inputs
+    j.uses(software_file, link=Link.INPUT)
+    for f in ref_files:
+        j.uses(f, link=Link.INPUT)
+    j.uses(wf_files['unified_genotyper_vcf'], link=Link.INPUT)
+
+    # outputs
+    wf_files["indel_only_vcf"] = File("indel_only.vcf")
+    j.uses(wf_files["indel_only_vcf"], link=Link.OUTPUT, transfer=True)
+    
+    j.addArguments("-T", "SelectVariants",
+                   "-nt", "16",
+                   "-R", extract_fasta_basefile(ref_files),
+                   "-selectType", "INDEL",
+                   "-V", wf_files["unified_genotyper_vcf"],
+                   "-o", wf_files["indel_only_vcf"])
     return j
 
 
@@ -592,7 +591,7 @@ def filtering_snp(dax, software_file, ref_files, wf_files):
     j.uses(software_file, link=Link.INPUT)
     for f in ref_files:
         j.uses(f, link=Link.INPUT)
-    j.uses(wf_files['raw_snp_vcf'], link=Link.INPUT)
+    j.uses(wf_files['snp_only_vcf'], link=Link.INPUT)
 
     # outputs
     wf_files["filtered_snp_vcf"] = File("filtered_snp.vcf")
@@ -600,7 +599,7 @@ def filtering_snp(dax, software_file, ref_files, wf_files):
     
     j.addArguments("-T", "VariantFiltration",
                    "-R", extract_fasta_basefile(ref_files),
-                   "-V", wf_files['raw_snp_vcf'],
+                   "-V", wf_files['snp_only_vcf'],
                    "--filterExpression", "'QD < 2.0 || FS > 60.0 || MQ < 40.0'",
                    "--filterName", "my_snp_filter",
                    "-o", wf_files["filtered_snp_vcf"])
@@ -617,7 +616,7 @@ def filtering_indel(dax, software_file, ref_files, wf_files):
     j.uses(software_file, link=Link.INPUT)
     for f in ref_files:
         j.uses(f, link=Link.INPUT)
-    j.uses(wf_files['raw_indel_vcf'], link=Link.INPUT)
+    j.uses(wf_files['indel_only_vcf'], link=Link.INPUT)
 
     # outputs
     wf_files["filtered_indel_vcf"] = File("filtered_indel.vcf")
@@ -625,8 +624,8 @@ def filtering_indel(dax, software_file, ref_files, wf_files):
     
     j.addArguments("-T", "VariantFiltration",
                    "-R", extract_fasta_basefile(ref_files),
-                   "-V", wf_files['raw_indel_vcf'],
-                   "--filterExpression", "'QD < 2.0 || ReadPosRankSum < -20.0 || InbreedingCoeff < -0.8 || FS > 200.0'",
+                   "-V", wf_files['indel_only_vcf'],
+                   "--filterExpression", "'QD < 2.0 || FS > 200.0 || ReadPosRankSum < -20.0'",
                    "--filterName", "my_indel_filter",
                    "-o", wf_files["filtered_indel_vcf"])
     return j

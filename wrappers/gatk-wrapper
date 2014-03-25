@@ -11,7 +11,7 @@ export TMPDIR=`pwd`
 OUTFILE=`mktemp -t gatk-output.XXXXXXXXXX` || exit 1
 
 java -Xmx10g -Djava.io.tmpdir=$TMPDIR \
-     -jar ./software/GenomeAnalysisTK-2.8-1-g932cd3a/GenomeAnalysisTK.jar \
+     -jar ./software/GenomeAnalysisTK-3.0.0/GenomeAnalysisTK.jar \
      "$@" \
      >$OUTFILE 2>&1
 EXITCODE=$?
@@ -24,7 +24,7 @@ if [ "x$EXITCODE" != "x0" ]; then
             echo
             echo "Rerunning with --fix_misencoded_quality_scores..."
             java -Xmx10g -Djava.io.tmpdir=$TMPDIR \
-                 -jar ./software/GenomeAnalysisTK-2.8-1-g932cd3a/GenomeAnalysisTK.jar \
+                 -jar ./software/GenomeAnalysisTK-3.0.0/GenomeAnalysisTK.jar \
                  "$@" \
                  --fix_misencoded_quality_scores \
                  >$OUTFILE 2>&1

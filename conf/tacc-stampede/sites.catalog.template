@@ -29,8 +29,8 @@
         <profile namespace="pegasus" key="irodsEnvFile" >$home/irods.iplant.env</profile>
     </site>
     <site  handle="isi" arch="x86_64" os="LINUX">
-        <directory type="local-storage" path="/local-scratch/http/soybean/outputs">
-            <file-server operation="all" url="gsiftp://workflow.isi.edu/local-scratch/http/soybean/outputs"/>
+        <directory type="local-storage" path="/local-scratch/http/$username/soykb/outputs">
+            <file-server operation="all" url="gsiftp://workflow.isi.edu/local-scratch/http/$username/soykb/outputs"/>
         </directory>
     </site>
     <site  handle="osg-xsede" arch="x86_64" os="LINUX">
