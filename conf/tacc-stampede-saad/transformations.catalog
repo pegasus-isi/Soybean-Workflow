@@ -1,0 +1,19 @@
+tr pegasus::transfer {
+    site execution {
+        pfn "/home1/00384/rynge/software/pegasus/4.4.0cvs/bin/pegasus-transfer"
+        arch "x86_64"
+        os "linux"
+        type "INSTALLED"
+        profile globus "maxwalltime" "1440"
+    }
+}
+tr pegasus::mpiexec {
+    site execution {
+        pfn "/home1/00384/rynge/software/pegasus-mpi-cluster/pegasus-mpi-cluster"
+        arch "x86_64"
+        os "linux"
+        type "INSTALLED"
+        profile globus "jobtype" "mpi"
+        profile globus "maxwalltime" "2880"
+    }
+}

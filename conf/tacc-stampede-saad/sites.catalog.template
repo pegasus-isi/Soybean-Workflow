@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sitecatalog xmlns="http://pegasus.isi.edu/schema/sitecatalog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://pegasus.isi.edu/schema/sitecatalog http://pegasus.isi.edu/schema/sc-4.0.xsd" version="4.0">
+    <site  handle="local" arch="x86_64" os="LINUX">
+        <directory type="shared-scratch" path="$work_dir/scratch">
+            <file-server operation="all" url="scp://$submit_host$work_dir/scratch"/>
+        </directory>
+        <directory type="local-storage" path="$work_dir/outputs">
+            <file-server operation="all" url="scp://$submit_host$work_dir/outputs"/>
+        </directory>
+        <profile namespace="env" key="PATH">$pegasus_bin:$irods_bin:/usr/bin:/bin</profile>
+        <profile namespace="pegasus" key="SSH_PRIVATE_KEY">$home/.ssh/workflow</profile>
+    </site>
+    <site  handle="execution" arch="x86_64" os="LINUX">
+        <grid  type="gt5" contact="login5.stampede.tacc.utexas.edu:2119/jobmanager-slurm" scheduler="Fork" jobtype="auxillary"/>
+        <grid  type="gt5" contact="login5.stampede.tacc.utexas.edu:2119/jobmanager-slurm" scheduler="Condor" jobtype="compute"/>
+        <directory type="shared-scratch" path="/scratch/02580/smk5g5/workflow-runs">
+            <file-server operation="all" url="file:///scratch/02580/smk5g5/workflow-runs"/>
+        </directory>
+        <directory type="local-storage" path="/work/02580/smk5g5/workflow-outputs">
+            <file-server operation="all" url="file:///work/02580/smk5g5/workflow-outputs"/>
+        </directory>
+        <profile namespace="pegasus" key="job.aggregator">mpiexec</profile>
+        <profile namespace="env" key="PEGASUS_HOME">/home1/00384/rynge/software/pegasus/4.4.0cvs</profile>
+        <profile namespace="env" key="PATH">/home1/00384/rynge/software/pegasus/4.4.0cvs/bin:/home1/00384/rynge/software/irods/3.2/bin:/scratch/projects/xsede/globus-5.0.4-r1/bin:/usr/bin:/bin</profile>
+        <profile namespace="env" key="LD_LIBRARY_PATH">/scratch/projects/xsede/globus-5.0.4-r1/lib</profile>
+        <profile namespace="globus" key="project">TG-MCB140044</profile>
+    </site>
+    <site  handle="irods_iplant" arch="x86_64" os="LINUX">
+        <profile namespace="pegasus" key="irodsEnvFile" >$home/irods.iplant.env</profile>
+    </site>
+    <site  handle="isi" arch="x86_64" os="LINUX">
+        <directory type="local-storage" path="/local-scratch/http/$username/soykb/tacc-outputs">
+            <file-server operation="all" url="gsiftp://workflow.isi.edu/local-scratch/http/$username/soykb/tacc-outputs"/>
+        </directory>
+    </site>
+</sitecatalog>
+
