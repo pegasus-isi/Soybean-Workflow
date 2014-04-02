@@ -1,7 +1,6 @@
 #!/bin/bash
 
 set -e
-set -v
 
 if [ ! -d software ]; then
     tar xzf software.tar.gz

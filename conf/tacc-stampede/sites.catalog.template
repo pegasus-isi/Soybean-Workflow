@@ -21,21 +21,16 @@
         </directory>
         <profile namespace="pegasus" key="job.aggregator">mpiexec</profile>
         <profile namespace="env" key="PEGASUS_HOME">/home1/00384/rynge/software/pegasus/4.4.0cvs</profile>
-        <profile namespace="env" key="PATH">/home1/00384/rynge/software/pegasus/4.4.0cvs/bin:/home1/00384/rynge/software/irods/3.2/bin:/opt/apps/R/2.15.1/bin:/scratch/projects/xsede/globus-5.0.4-r1/bin:/usr/bin:/bin</profile>
-        <profile namespace="env" key="LD_LIBRARY_PATH">/opt/apps/R/2.15.1/lib64:/scratch/projects/xsede/globus-5.0.4-r1/lib</profile>
+        <profile namespace="env" key="PATH">/home1/00384/rynge/software/pegasus/4.4.0cvs/bin:/home1/00384/rynge/software/irods/3.2/bin:/scratch/projects/xsede/globus-5.0.4-r1/bin:/usr/bin:/bin</profile>
+        <profile namespace="env" key="LD_LIBRARY_PATH">/scratch/projects/xsede/globus-5.0.4-r1/lib</profile>
         <profile namespace="globus" key="project">TG-STA110014S</profile>
     </site>
     <site  handle="irods_iplant" arch="x86_64" os="LINUX">
         <profile namespace="pegasus" key="irodsEnvFile" >$home/irods.iplant.env</profile>
     </site>
     <site  handle="isi" arch="x86_64" os="LINUX">
-        <directory type="local-storage" path="/local-scratch/http/$username/soykb/outputs">
-            <file-server operation="all" url="gsiftp://workflow.isi.edu/local-scratch/http/$username/soykb/outputs"/>
-        </directory>
-    </site>
-    <site  handle="osg-xsede" arch="x86_64" os="LINUX">
-        <directory type="local-storage" path="/local-scratch/public_html/rynge/soybean/outputs-tacc">
-            <file-server operation="all" url="gsiftp://osg-xsede.grid.iu.edu/local-scratch/public_html/rynge/soybean/outputs-tacc"/>
+        <directory type="local-storage" path="/local-scratch/http/$username/soykb/tacc-outputs">
+            <file-server operation="all" url="gsiftp://workflow.isi.edu/local-scratch/http/$username/soykb/tacc-outputs"/>
         </directory>
     </site>
 </sitecatalog>
