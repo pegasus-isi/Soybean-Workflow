@@ -439,7 +439,7 @@ def unified_genotyper(dax, software_file, ref_files, wf_files, input_files):
 
 
 def select_and_filter_snp(dax, software_file, ref_files, wf_files,
-                          in_file, out_file):
+                          in_file, out_file, out_idx):
     
     # we need an intermediate file
     intername = re.sub(".*/", "", in_file.name) + "_snp_only.vcf"
@@ -479,6 +479,7 @@ def select_and_filter_snp(dax, software_file, ref_files, wf_files,
 
     # outputs
     j.uses(out_file, link=Link.OUTPUT, transfer=True)
+    j.uses(out_idx, link=Link.OUTPUT, transfer=True)
     
     j.addArguments("-T", "VariantFiltration",
                    "-R", extract_fasta_basefile(ref_files),
@@ -491,7 +492,7 @@ def select_and_filter_snp(dax, software_file, ref_files, wf_files,
 
 
 def select_and_filter_indel(dax, software_file, ref_files, wf_files,
-                            in_file, out_file):
+                            in_file, out_file, out_idx):
 
     # we need an intermediate file
     intername = re.sub(".*/", "", in_file.name) + "_indel_only.vcf"
@@ -532,6 +533,7 @@ def select_and_filter_indel(dax, software_file, ref_files, wf_files,
 
     # outputs
     j.uses(out_file, link=Link.OUTPUT, transfer=True)
+    j.uses(out_idx, link=Link.OUTPUT, transfer=True)
     
     j.addArguments("-T", "VariantFiltration",
                    "-R", extract_fasta_basefile(ref_files),
@@ -561,6 +563,8 @@ def haplotype_caller(sample_name, dax, software_file, ref_files, wf_files,
     fname = sample_name + "_" + chromosome + ".vcf"
     wf_files[fname] = File(fname)
     j.uses(wf_files[fname], link=Link.OUTPUT, transfer=False)
+    wf_files[fname + ".idx"] = File(fname + ".idx")
+    j.uses(wf_files[fname + ".idx"], link=Link.OUTPUT, transfer=False)
     
     j.addArguments("-T", "HaplotypeCaller",
                    "--emitRefConfidence", "GVCF",
@@ -586,11 +590,14 @@ def combine_gvcf_chromosomes(sample_name, dax, software_file, ref_files, wf_file
     for i in range(1, 21):
         fname = "%s_Chr%02d.vcf" % (sample_name, i)
         j.uses(wf_files[fname], link=Link.INPUT)
+        j.uses(wf_files[fname + ".idx"], link=Link.INPUT)
 
     # outputs
     fname = sample_name + "_mergeGVCF.vcf"
     wf_files[fname] = File(fname)
     j.uses(wf_files[fname], link=Link.OUTPUT, transfer=True)
+    wf_files[fname + ".idx"] = File(fname + ".idx")
+    j.uses(wf_files[fname + ".idx"], link=Link.OUTPUT, transfer=True)
     
     j.addArguments("-T", "CombineGVCFs",
                    "-R", extract_fasta_basefile(ref_files),
@@ -618,12 +625,15 @@ def genotype_gvcfs(dax, software_file, ref_files, wf_files, sample_names,
         fname = sname + "_" + chromosome + ".vcf"
         f = wf_files[fname]
         j.uses(f, link=Link.INPUT)
+        j.uses(wf_files[fname + ".idx"], link=Link.INPUT)
         variant_files.append(f)
 
     # outputs
     fname = "GVCF_" + chromosome + ".vcf"
     wf_files[fname] = File(fname)
     j.uses(wf_files[fname], link=Link.OUTPUT, transfer=True)
+    wf_files[fname + ".idx"] = File(fname + ".idx")
+    j.uses(wf_files[fname + ".idx"], link=Link.OUTPUT, transfer=True)
     
     j.addArguments("-T", "GenotypeGVCFs",
                    "-R", extract_fasta_basefile(ref_files),
@@ -648,11 +658,14 @@ def combine_variants(dax, software_file, ref_files, wf_files):
     for i in range(1, 21):
         fname = "GVCF_Chr%02d.vcf" % (i)
         j.uses(wf_files[fname], link=Link.INPUT)
+        j.uses(wf_files[fname + ".idx"], link=Link.INPUT)
 
     # outputs
     fname = "All.vcf"
     wf_files[fname] = File(fname)
     j.uses(wf_files[fname], link=Link.OUTPUT, transfer=True)
+    wf_files[fname + ".idx"] = File(fname + ".idx")
+    j.uses(wf_files[fname + ".idx"], link=Link.OUTPUT, transfer=True)
     
     j.addArguments("-T", "CombineVariants",
                    "-genotypeMergeOptions", "UNIQUIFY",
@@ -666,14 +679,18 @@ def combine_variants(dax, software_file, ref_files, wf_files):
 
     # filter the results    
     wf_files['All_filtered_snp.vcf'] = File("All_filtered_snp.vcf")
+    wf_files['All_filtered_snp.vcf.idx'] = File("All_filtered_snp.vcf.idx")
     select_and_filter_snp(dax, software_file, ref_files, wf_files,
                           wf_files['All.vcf'],
-                          wf_files['All_filtered_snp.vcf'])
+                          wf_files['All_filtered_snp.vcf'],
+                          wf_files['All_filtered_snp.vcf.idx'])
     
     wf_files['All_filtered_indel.vcf'] = File("All_filtered_indel.vcf")
+    wf_files['All_filtered_indel.vcf.idx'] = File("All_filtered_indel.vcf.idx")
     select_and_filter_indel(dax, software_file, ref_files, wf_files,
                             wf_files['All.vcf'],
-                            wf_files['All_filtered_indel.vcf'])
+                            wf_files['All_filtered_indel.vcf'],
+                            wf_files['All_filtered_indel.vcf.idx'])
     
 
 
