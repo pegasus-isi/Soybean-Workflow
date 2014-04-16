@@ -13,7 +13,7 @@
     <site  handle="execution" arch="x86_64" os="LINUX">
         <profile namespace="pegasus" key="style" >condor</profile>
         <profile namespace="condor" key="universe" >vanilla</profile>
-        <profile namespace="condor" key="requirements" >FileSystemDomain == "workflow.isi.edu"</profile>
+        <profile namespace="condor" key="requirements" >UidDomain == "workflow.isi.edu" || UidDomain == "pegasus.isi.edu"</profile>
         <profile namespace="env" key="PATH">$irods_bin:/usr/bin:/bin</profile>
     </site>
     <site  handle="staging" arch="x86_64" os="LINUX">
@@ -30,8 +30,8 @@
         </directory>
     </site>
     <site  handle="isi_workflow" arch="x86_64" os="LINUX">
-        <directory type="local-storage" path="/local-scratch/1-month-auto-purge/outputs/$username">
-            <file-server operation="all" url="gsiftp://workflow.isi.edu/local-scratch/1-month-auto-purge/outputs/$username"/>
+        <directory type="local-storage" path="/local-scratch/http/$username/soykb/isi-outputs">
+            <file-server operation="all" url="gsiftp://workflow.isi.edu/local-scratch/http/$username/soykb/isi-outputs"/>
         </directory>
     </site>
 </sitecatalog>
