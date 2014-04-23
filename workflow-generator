@@ -247,7 +247,7 @@ def alignment_to_reference(sample_name, dax, software_tar, ref_files, wf_files):
     # Oversubscriptions is ok, as bwa can not keep all the cores busy 100%
     # of the time.
     add_executable(dax, "alignment_to_reference", "bwa-wrapper")
-    j = ComputeJob("alignment_to_reference", cores = 8, mem_gb = 8,
+    j = ComputeJob("alignment_to_reference", cores = 7, mem_gb = 8,
                    partition = "part1")
     
     # determine which is the fasta file
