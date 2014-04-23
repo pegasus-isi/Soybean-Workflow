@@ -11,7 +11,7 @@ OUTFILE=`mktemp -t gatk-output.XXXXXXXXXX` || exit 1
 # memory depends on what subsystem we call
 OPTIONS="-Xmx7g"
 if (echo "'$@'" | grep -i "HaplotypeCaller") >/dev/null; then
-    OPTIONS="-Xmx3g"
+    OPTIONS="-Xmx1g"
 fi
 OPTIONS="$OPTIONS -Djava.io.tmpdir=$TMPDIR"
 
