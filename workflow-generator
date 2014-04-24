@@ -276,7 +276,7 @@ def alignment_to_reference(sample_name, dax, software_tar, ref_files, wf_files):
 def sort_sam(sample_name, dax, software_tar, ref_files, wf_files):
 
     add_executable(dax, "sort_sam", "picard-wrapper")
-    j = ComputeJob("sort_sam", cores = 1, mem_gb = 24, 
+    j = ComputeJob("sort_sam", cores = 1, mem_gb = 23, 
                    partition = "part1")
     j.uses(software_tar, link=Link.INPUT)
     j.uses(wf_files['sam'], link=Link.INPUT)
@@ -299,7 +299,7 @@ def sort_sam(sample_name, dax, software_tar, ref_files, wf_files):
 
 def dedup(sample_name, dax, software_tar, ref_files, wf_files):
     add_executable(dax, "dedup", "picard-wrapper")
-    j = ComputeJob("dedup", cores = 1, mem_gb = 24,
+    j = ComputeJob("dedup", cores = 1, mem_gb = 23,
                    partition = "part1")
     j.uses(software_tar, link=Link.INPUT)
     j.uses(wf_files['sorted_reads'], link=Link.INPUT)
@@ -324,7 +324,7 @@ def dedup(sample_name, dax, software_tar, ref_files, wf_files):
 
 def add_replace(sample_name, dax, software_tar, ref_files, wf_files):
     add_executable(dax, "add_replace", "picard-wrapper")
-    j = ComputeJob("add_replace", cores = 1, mem_gb = 24,
+    j = ComputeJob("add_replace", cores = 1, mem_gb = 23,
                    partition = "part1")
     j.uses(software_tar, link=Link.INPUT)
     j.uses(wf_files['deduped_reads'], link=Link.INPUT)
@@ -353,7 +353,7 @@ def add_replace(sample_name, dax, software_tar, ref_files, wf_files):
 
 def realign_target_creator(sample_name, dax, software_tar, ref_files, wf_files):
     add_executable(dax, "realign_target_creator", "gatk-wrapper")
-    j = ComputeJob("realign_target_creator", cores = 15, mem_gb = 10,
+    j = ComputeJob("realign_target_creator", cores = 15, mem_gb = 11,
                    partition = "part1")
     j.uses(software_tar, link=Link.INPUT)
     for f in ref_files:
@@ -375,7 +375,7 @@ def realign_target_creator(sample_name, dax, software_tar, ref_files, wf_files):
 def indel_realign(sample_name, dax, software_tar, ref_files, wf_files):
     # IndelRealigner can only be run single threaded
     add_executable(dax, "indel_realign", "gatk-wrapper")   
-    j = ComputeJob("indel_realign", cores = 1, mem_gb = 10,
+    j = ComputeJob("indel_realign", cores = 1, mem_gb = 11,
                    partition = "part1")
     j.uses(software_tar, link=Link.INPUT)
     for f in ref_files:

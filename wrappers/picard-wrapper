@@ -6,6 +6,6 @@ if [ ! -d software ]; then
     tar xzf software.tar.gz
 fi
 
-java -Xmx20g -jar ./software/picard-tools-1.92/"$@"
+java -Xmx17g -XX:+UseSerialGC -jar ./software/picard-tools-1.92/"$@"
 
 

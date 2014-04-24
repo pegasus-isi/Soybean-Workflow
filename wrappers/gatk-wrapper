@@ -9,9 +9,9 @@ export TMPDIR=`pwd`
 OUTFILE=`mktemp -t gatk-output.XXXXXXXXXX` || exit 1
 
 # memory depends on what subsystem we call
-OPTIONS="-Xmx7g"
+OPTIONS="-Xmx7g -XX:+UseSerialGC"
 if (echo "'$@'" | grep -i "HaplotypeCaller") >/dev/null; then
-    OPTIONS="-Xmx1g"
+    OPTIONS="-Xmx1g -XX:+UseSerialGC"
 fi
 OPTIONS="$OPTIONS -Djava.io.tmpdir=$TMPDIR"
 
