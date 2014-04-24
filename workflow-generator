@@ -276,7 +276,7 @@ def alignment_to_reference(sample_name, dax, software_tar, ref_files, wf_files):
 def sort_sam(sample_name, dax, software_tar, ref_files, wf_files):
 
     add_executable(dax, "sort_sam", "picard-wrapper")
-    j = ComputeJob("sort_sam", cores = 1, mem_gb = 22, 
+    j = ComputeJob("sort_sam", cores = 1, mem_gb = 24, 
                    partition = "part1")
     j.uses(software_tar, link=Link.INPUT)
     j.uses(wf_files['sam'], link=Link.INPUT)
@@ -299,7 +299,7 @@ def sort_sam(sample_name, dax, software_tar, ref_files, wf_files):
 
 def dedup(sample_name, dax, software_tar, ref_files, wf_files):
     add_executable(dax, "dedup", "picard-wrapper")
-    j = ComputeJob("dedup", cores = 1, mem_gb = 22,
+    j = ComputeJob("dedup", cores = 1, mem_gb = 24,
                    partition = "part1")
     j.uses(software_tar, link=Link.INPUT)
     j.uses(wf_files['sorted_reads'], link=Link.INPUT)
@@ -324,7 +324,7 @@ def dedup(sample_name, dax, software_tar, ref_files, wf_files):
 
 def add_replace(sample_name, dax, software_tar, ref_files, wf_files):
     add_executable(dax, "add_replace", "picard-wrapper")
-    j = ComputeJob("add_replace", cores = 1, mem_gb = 22,
+    j = ComputeJob("add_replace", cores = 1, mem_gb = 24,
                    partition = "part1")
     j.uses(software_tar, link=Link.INPUT)
     j.uses(wf_files['deduped_reads'], link=Link.INPUT)
