@@ -510,7 +510,7 @@ def haplotype_caller(sample_name, dax, software_file, ref_files, wf_files,
                      chromosome):
 
     add_executable(dax, "haplotype_caller", "gatk-wrapper")
-    j = ComputeJob("haplotype_caller", cores = 1, mem_gb = 4,
+    j = ComputeJob("haplotype_caller", cores = 1, mem_gb = 5,
                    partition = "haplotype")
     
     # inputs
