@@ -832,6 +832,7 @@ def main():
           " --conf " + conf.get("local", "top_dir") + \
           "/conf/" + conf.get("local", "exec_env") + "/pegasus.conf" + \
           " --dir ." + \
+          " --relative-dir wf-" + conf.get("local", "run_id") + \
           " --sites execution"
     
     if conf.get("exec_environment", "output_site") != "":
