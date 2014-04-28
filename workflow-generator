@@ -146,6 +146,25 @@ def myexec(cmd_line):
                            % (cmd_line, r))
 
 
+def proxy_check():
+    """ Verify that the user has a proxy and it is valid for a long time """
+    p = subprocess.Popen("grid-proxy-info -timeleft", shell=True, 
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    stdoutdata, stderrdata = p.communicate()
+    r = p.returncode
+    if r != 0:
+        logger.error(stderrdata)
+        raise RuntimeError("Command '%s' failed with error code %s" \
+                           % (cmd_line, r))
+    timeleft = int(stdoutdata)
+
+    # two weeks minimum lifetime
+    if timeleft < (60*60*24*14):
+        raise RuntimeError("There is not enough time left on your grid" +
+                           " proxy. Please renew, then run this command" +
+                           " again")
+
+        
 def generate_site_catalog():
     """ Uses a templete file to produce the Pegasus site catalog """
     
@@ -799,6 +818,9 @@ def main():
                                        stdout=subprocess.PIPE,
                                        shell=True).communicate()[0]
     conf.set("local", "pegasus_bin", pegasus_bin_dir)
+
+    # check proxy before doing anything else
+    proxy_check()
     
     # create a local work directory for the workflow
     logger.info("Setting up work directory at %s" \
