@@ -96,6 +96,9 @@ class ComputeJob(Job):
                 self.addProfile(Profile(Namespace.GLOBUS,
                                         key="count",
                                         value=cores))
+                self.addProfile(Profile(Namespace.ENV,
+                                        key="PMC_HOST_MEMORY",
+                                        value="28000"))
             else:
                 hosts = conf.get("exec_environment", "hosts_regular")
                 cores = str(16 * int(hosts))
@@ -108,6 +111,9 @@ class ComputeJob(Job):
                 self.addProfile(Profile(Namespace.GLOBUS,
                                         key="count",
                                         value=cores))
+                self.addProfile(Profile(Namespace.ENV,
+                                        key="PMC_HOST_MEMORY",
+                                        value="28000"))
 
 
 # --- functions -----------------------------------------------------------------------
