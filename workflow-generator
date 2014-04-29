@@ -165,7 +165,7 @@ def proxy_check():
     timeleft = int(stdoutdata)
 
     # two weeks minimum lifetime
-    if timeleft < (60*60*24*14):
+    if timeleft < (60*60*24*10):
         raise RuntimeError("There is not enough time left on your grid" +
                            " proxy. Please renew, then run this command" +
                            " again")
