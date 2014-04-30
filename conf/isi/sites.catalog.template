@@ -14,6 +14,7 @@
         <profile namespace="pegasus" key="style" >condor</profile>
         <profile namespace="condor" key="universe" >vanilla</profile>
         <!--profile namespace="condor" key="requirements" >UidDomain == "workflow.isi.edu" || UidDomain == "pegasus.isi.edu"</profile-->
+        <profile namespace="condor" key="requirements" >isUndefined(GLIDEIN_Entry_Name)</profile>
         <profile namespace="condor" key="+ProjectName" >"SoyKB"</profile>
         <profile namespace="env" key="PATH">$irods_bin:/usr/bin:/bin</profile>
     </site>
