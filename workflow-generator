@@ -246,8 +246,6 @@ def extract_sample_name(url):
     return name
 
 
-
-
 def add_executable(dax, logical_name, wrapper_name):
     """ adds executables to the DAX-level replica catalog """
     global added_execs
@@ -546,7 +544,7 @@ def haplotype_caller(sample_name, dax, software_file, ref_files, wf_files,
     j.uses(wf_files['indel_realigned_index'], link=Link.INPUT)
 
     # outputs
-    fname = sample_name + "_" + chromosome + ".vcf"
+    fname = conf.get("local", "run_id") + "-" + sample_name + "_" + chromosome + ".vcf"
     wf_files[fname] = File(fname)
     j.uses(wf_files[fname], link=Link.OUTPUT, transfer=False)
     wf_files[fname + ".idx"] = File(fname + ".idx")
@@ -579,7 +577,7 @@ def combine_gvcf_chromosomes(sample_name, dax, software_file, ref_files, wf_file
         j.uses(wf_files[fname + ".idx"], link=Link.INPUT)
 
     # outputs
-    fname = sample_name + "_mergeGVCF.vcf"
+    fname = conf.get("local", "run_id") + "-" + sample_name + "_mergeGVCF.vcf"
     wf_files[fname] = File(fname)
     j.uses(wf_files[fname], link=Link.OUTPUT, transfer=True)
     wf_files[fname + ".idx"] = File(fname + ".idx")
@@ -608,14 +606,14 @@ def genotype_gvcfs(dax, software_file, ref_files, wf_files, sample_names,
     for f in ref_files:
         j.uses(f, link=Link.INPUT)
     for sname in sample_names:
-        fname = sname + "_" + chromosome + ".vcf"
+        fname = conf.get("local", "run_id") + "-" + sname + "_" + chromosome + ".vcf"
         f = wf_files[fname]
         j.uses(f, link=Link.INPUT)
         j.uses(wf_files[fname + ".idx"], link=Link.INPUT)
         variant_files.append(f)
 
     # outputs
-    fname = "GVCF_" + chromosome + ".vcf"
+    fname = conf.get("local", "run_id") + "-" + "GVCF_" + chromosome + ".vcf"
     wf_files[fname] = File(fname)
     j.uses(wf_files[fname], link=Link.OUTPUT, transfer=True)
     wf_files[fname + ".idx"] = File(fname + ".idx")
@@ -642,12 +640,12 @@ def combine_variants(dax, software_file, ref_files, wf_files):
     for f in ref_files:
         j.uses(f, link=Link.INPUT)
     for i in range(1, 21):
-        fname = "GVCF_Chr%02d.vcf" % (i)
+        fname = conf.get("local", "run_id") + "-" + "GVCF_Chr%02d.vcf" % (i)
         j.uses(wf_files[fname], link=Link.INPUT)
         j.uses(wf_files[fname + ".idx"], link=Link.INPUT)
 
     # outputs
-    fname = "All.vcf"
+    fname = conf.get("local", "run_id") + "-" + "All.vcf"
     wf_files[fname] = File(fname)
     j.uses(wf_files[fname], link=Link.OUTPUT, transfer=True)
     wf_files[fname + ".idx"] = File(fname + ".idx")
@@ -658,26 +656,29 @@ def combine_variants(dax, software_file, ref_files, wf_files):
                    "-R", extract_fasta_basefile(ref_files),
                    "-o", wf_files[fname])
     for i in range(1, 21):
-        fname = "GVCF_Chr%02d.vcf" % (i)
+        fname = conf.get("local", "run_id") + "-" + "GVCF_Chr%02d.vcf" % (i)
         j.addArguments("--variant", wf_files[fname])
     
     dax.addJob(j)
 
     # filter the results    
-    wf_files['All_filtered_snp.vcf'] = File("All_filtered_snp.vcf")
-    wf_files['All_filtered_snp.vcf.idx'] = File("All_filtered_snp.vcf.idx")
+    wf_files[conf.get("local", "run_id") + "-" + 'All_filtered_snp.vcf'] = \
+            File(conf.get("local", "run_id") + "-" + "All_filtered_snp.vcf")
+    wf_files[conf.get("local", "run_id") + "-" + 'All_filtered_snp.vcf.idx'] = \
+            File(conf.get("local", "run_id") + "-" + "All_filtered_snp.vcf.idx")
     select_and_filter_snp(dax, software_file, ref_files, wf_files,
-                          wf_files['All.vcf'],
-                          wf_files['All_filtered_snp.vcf'],
-                          wf_files['All_filtered_snp.vcf.idx'])
+                          wf_files[conf.get("local", "run_id") + "-" + 'All.vcf'],
+                          wf_files[conf.get("local", "run_id") + "-" + 'All_filtered_snp.vcf'],
+                          wf_files[conf.get("local", "run_id") + "-" + 'All_filtered_snp.vcf.idx'])
     
-    wf_files['All_filtered_indel.vcf'] = File("All_filtered_indel.vcf")
-    wf_files['All_filtered_indel.vcf.idx'] = File("All_filtered_indel.vcf.idx")
+    wf_files[conf.get("local", "run_id") + "-" + 'All_filtered_indel.vcf'] = \
+            File(conf.get("local", "run_id") + "-" + "All_filtered_indel.vcf")
+    wf_files[conf.get("local", "run_id") + "-" + 'All_filtered_indel.vcf.idx'] = \
+            File(conf.get("local", "run_id") + "-" + "All_filtered_indel.vcf.idx")
     select_and_filter_indel(dax, software_file, ref_files, wf_files,
-                            wf_files['All.vcf'],
-                            wf_files['All_filtered_indel.vcf'],
-                            wf_files['All_filtered_indel.vcf.idx'])
-    
+                            wf_files[conf.get("local", "run_id") + "-" + 'All.vcf'],
+                            wf_files[conf.get("local", "run_id") + "-" + 'All_filtered_indel.vcf'],
+                            wf_files[conf.get("local", "run_id") + "-" + 'All_filtered_indel.vcf.idx'])
 
 
 def generate_dax():
@@ -745,17 +746,17 @@ def generate_dax():
         sample_name = extract_sample_name(wf_files['paired_read1_fastq'].name)
 
         # files we need to track
-        wf_files['sam'] = File(sample_name + "_aligned_reads.sam")
-        wf_files['sorted_reads'] = File(sample_name + "_sorted_reads.bam")
-        wf_files['sorted_index'] = File(sample_name + "_sorted_reads.bai")
-        wf_files['deduped_reads'] = File(sample_name + "_deduped_reads.bam")
-        wf_files['deduped_index'] = File(sample_name + "_deduped_reads.bai")
-        wf_files['deduped_metrics'] = File(sample_name + "_deduped.metrics")
-        wf_files['addrepl_reads'] = File(sample_name + "_addrepl.bam")
-        wf_files['addrepl_index'] = File(sample_name + "_addrepl.bai")
-        wf_files['intervals'] = File(sample_name + "_intervals.list")
-        wf_files['indel_realigned_reads'] = File(sample_name + "_indel_realigned.bam")
-        wf_files['indel_realigned_index'] = File(sample_name + "_indel_realigned.bai")
+        wf_files['sam'] = File(conf.get("local", "run_id") + "-" + sample_name + "_aligned_reads.sam")
+        wf_files['sorted_reads'] = File(conf.get("local", "run_id") + "-" + sample_name + "_sorted_reads.bam")
+        wf_files['sorted_index'] = File(conf.get("local", "run_id") + "-" + sample_name + "_sorted_reads.bai")
+        wf_files['deduped_reads'] = File(conf.get("local", "run_id") + "-" + sample_name + "_deduped_reads.bam")
+        wf_files['deduped_index'] = File(conf.get("local", "run_id") + "-" + sample_name + "_deduped_reads.bai")
+        wf_files['deduped_metrics'] = File(conf.get("local", "run_id") + "-" + sample_name + "_deduped.metrics")
+        wf_files['addrepl_reads'] = File(conf.get("local", "run_id") + "-" + sample_name + "_addrepl.bam")
+        wf_files['addrepl_index'] = File(conf.get("local", "run_id") + "-" + sample_name + "_addrepl.bai")
+        wf_files['intervals'] = File(conf.get("local", "run_id") + "-" + sample_name + "_intervals.list")
+        wf_files['indel_realigned_reads'] = File(conf.get("local", "run_id") + "-" + sample_name + "_indel_realigned.bam")
+        wf_files['indel_realigned_index'] = File(conf.get("local", "run_id") + "-" + sample_name + "_indel_realigned.bai")
     
         # Step 1 - dependent jobs are now added in the parent jobs
         align_job = alignment_to_reference(sample_name,

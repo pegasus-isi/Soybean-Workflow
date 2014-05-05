@@ -26,9 +26,9 @@
             <file-server operation="get" url="http://workflow.isi.edu/scratch/$username/soykb/scratch"/>
             <file-server operation="put" url="scp://$username@workflow.isi.edu/local-scratch/http/$username/soykb/scratch"/>
         </directory>
-        <directory type="local-storage" path="/local-scratch/http/$username/soykb/isi-outputs">
-            <file-server operation="get" url="http://workflow.isi.edu/scratch/$username/soykb/isi-outputs"/>
-            <file-server operation="put" url="scp://$username@workflow.isi.edu/local-scratch/http/$username/soykb/isi-outputs"/>
+        <directory type="local-storage" path="/local-scratch/http/$username/soykb/outputs">
+            <file-server operation="get" url="http://workflow.isi.edu/scratch/$username/soykb/outputs"/>
+            <file-server operation="put" url="scp://$username@workflow.isi.edu/local-scratch/http/$username/soykb/outputs"/>
         </directory>
 	    <profile namespace="pegasus" key="SSH_PRIVATE_KEY">$home/.ssh/workflow</profile>
     </site>
