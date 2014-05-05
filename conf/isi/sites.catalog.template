@@ -18,23 +18,19 @@
         <profile namespace="condor" key="+ProjectName" >"SoyKB"</profile>
         <profile namespace="env" key="PATH">$irods_bin:/usr/bin:/bin</profile>
     </site>
-    <site  handle="staging" arch="x86_64" os="LINUX">
-        <directory type="shared-scratch" path="/local-scratch/1-month-auto-purge/scratch">
-            <file-server operation="all" url="gsiftp://workflow.isi.edu/local-scratch/1-month-auto-purge/scratch"/>
-        </directory>
-    </site>
     <site  handle="irods_iplant" arch="x86_64" os="LINUX">
         <profile namespace="pegasus" key="irodsEnvFile" >$home/irods.iplant.env</profile>
     </site>
-    <site  handle="osg-xsede" arch="x86_64" os="LINUX">
-        <directory type="local-storage" path="/local-scratch/public_html/rynge/soybean/outputs">
-            <file-server operation="all" url="gsiftp://osg-xsede.grid.iu.edu/local-scratch/public_html/rynge/soybean/outputs"/>
-        </directory>
-    </site>
     <site  handle="isi_workflow" arch="x86_64" os="LINUX">
-        <directory type="local-storage" path="/local-scratch/http/$username/soykb/isi-outputs">
-            <file-server operation="all" url="gsiftp://workflow.isi.edu/local-scratch/http/$username/soykb/isi-outputs"/>
+        <directory type="shared-scratch" path="/local-scratch/http/$username/soykb/scratch">
+            <file-server operation="get" url="http://workflow.isi.edu/scratch/$username/soykb/scratch"/>
+            <file-server operation="put" url="scp://$username@workflow.isi.edu/local-scratch/http/$username/soykb/scratch"/>
         </directory>
+        <directory type="local-storage" path="/local-scratch/http/$username/soykb/isi-outputs">
+            <file-server operation="get" url="http://workflow.isi.edu/scratch/$username/soykb/isi-outputs"/>
+            <file-server operation="put" url="scp://$username@workflow.isi.edu/local-scratch/http/$username/soykb/isi-outputs"/>
+        </directory>
+	    <profile namespace="pegasus" key="SSH_PRIVATE_KEY">$home/.ssh/workflow</profile>
     </site>
 </sitecatalog>
 
