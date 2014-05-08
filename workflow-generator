@@ -67,6 +67,9 @@ class ComputeJob(Job):
         self.addProfile(Profile(Namespace.PEGASUS,
                                 key="pmc_request_memory",
                                 value=str(mem_mb)))
+        self.addProfile(Profile(Namespace.CONDOR,
+                                key="request_disk",
+                                value=str(20*1024*1024)))
 
         # special sauce for TACC - we want smaller jobs to go to the normal
         # compute nodes and the large memory ones to go to the large memory
@@ -431,7 +434,7 @@ def select_and_filter_snp(dax, software_file, ref_files, wf_files,
     
     add_executable(dax, "select_variants_snp", "gatk-wrapper")    
     j = ComputeJob("select_variants_snp", cores = 15, mem_gb = 10,
-                   partition = "haplotype")
+                   partition = "part2")
     
     # inputs
     j.uses(software_file, link=Link.INPUT)
@@ -453,7 +456,7 @@ def select_and_filter_snp(dax, software_file, ref_files, wf_files,
     
     add_executable(dax, "filtering_snp", "gatk-wrapper")    
     j = ComputeJob("filtering_snp", cores = 1, mem_gb = 10,
-                   partition = "haplotype")
+                   partition = "part2")
     
     # inputs
     j.uses(software_file, link=Link.INPUT)
@@ -485,7 +488,7 @@ def select_and_filter_indel(dax, software_file, ref_files, wf_files,
         
     add_executable(dax, "select_variants_indel", "gatk-wrapper")    
     j = ComputeJob("select_variants_indel", cores = 15, mem_gb = 10,
-                   partition = "haplotype")
+                   partition = "part2")
     
     # inputs
     j.uses(software_file, link=Link.INPUT)
@@ -507,7 +510,7 @@ def select_and_filter_indel(dax, software_file, ref_files, wf_files,
  
     add_executable(dax, "filtering_indel", "gatk-wrapper")    
     j = ComputeJob("filtering_indel", cores = 1, mem_gb = 10,
-                   partition = "haplotype")
+                   partition = "part2")
     
     # inputs
     j.uses(software_file, link=Link.INPUT)
@@ -534,7 +537,7 @@ def haplotype_caller(sample_name, dax, software_file, ref_files, wf_files,
 
     add_executable(dax, "haplotype_caller", "gatk-wrapper")
     j = ComputeJob("haplotype_caller", cores = 1, mem_gb = 5,
-                   partition = "haplotype")
+                   partition = "part2")
     
     # inputs
     j.uses(software_file, link=Link.INPUT)
@@ -561,23 +564,36 @@ def haplotype_caller(sample_name, dax, software_file, ref_files, wf_files,
     dax.addJob(j)
 
 
-def combine_gvcf_chromosomes(sample_name, dax, software_file, ref_files, wf_files):
+def merge_gvcf(dax, software_file, ref_files, wf_files, sample_names):
 
-    add_executable(dax, "combine_gcvf", "gatk-wrapper")
-    j = ComputeJob("combine_gcvf", cores = 1, mem_gb = 10,
-                   partition = "haplotype")
+    add_executable(dax, "merge_gcvf", "gatk-wrapper")
+    j = ComputeJob("merge_gcvf", cores = 1, mem_gb = 10,
+                   partition = "part2")
     
     # inputs
+    files = []
     j.uses(software_file, link=Link.INPUT)
     for f in ref_files:
         j.uses(f, link=Link.INPUT)
-    for i in range(1, 21):
-        fname = "%s_Chr%02d.vcf" % (sample_name, i)
-        j.uses(wf_files[fname], link=Link.INPUT)
-        j.uses(wf_files[fname + ".idx"], link=Link.INPUT)
+    for s in sample_names:
+        for i in range(1, 21):
+            fname = "%s-%s_Chr%02d.vcf" % (conf.get("local", "run_id"), s, i)
+            j.uses(wf_files[fname], link=Link.INPUT)
+            j.uses(wf_files[fname + ".idx"], link=Link.INPUT)
+            files.append(fname)
+
+    # create filelist to minimize the length of the command line
+    fd = open(conf.get("local", "work_dir") + "/haplotype-files.list", "w")
+    for f in files:
+        fd.write("%s\n" %(f))
+    fd.close()
+    hf = File("haplotype-files.list")
+    hf.addPFN(PFN(local_pfn(conf.get("local", "work_dir") + "/haplotype-files.list"), "local"))
+    dax.addFile(hf)
+    j.uses("haplotype-files.list", link=Link.INPUT)
 
     # outputs
-    fname = conf.get("local", "run_id") + "-" + sample_name + "_mergeGVCF.vcf"
+    fname = conf.get("local", "run_id") + "-mergeGVCF.vcf"
     wf_files[fname] = File(fname)
     j.uses(wf_files[fname], link=Link.OUTPUT, transfer=True)
     wf_files[fname + ".idx"] = File(fname + ".idx")
@@ -585,10 +601,8 @@ def combine_gvcf_chromosomes(sample_name, dax, software_file, ref_files, wf_file
     
     j.addArguments("-T", "CombineGVCFs",
                    "-R", extract_fasta_basefile(ref_files),
-                   "-o", wf_files[fname])
-    for i in range(1, 21):
-        fname = "%s_Chr%02d.vcf" % (sample_name, i)
-        j.addArguments("--variant", wf_files[fname])
+                   "-o", wf_files[fname],
+                   "--variant", "haplotype-files.list")
     
     dax.addJob(j)
 
@@ -598,7 +612,7 @@ def genotype_gvcfs(dax, software_file, ref_files, wf_files, sample_names,
 
     add_executable(dax, "genotype_gvcfs", "gatk-wrapper")
     j = ComputeJob("genotype_gvcfs", cores = 1, mem_gb = 10,
-                   partition = "haplotype")
+                   partition = "part2")
     
     # inputs
     variant_files = []
@@ -615,9 +629,9 @@ def genotype_gvcfs(dax, software_file, ref_files, wf_files, sample_names,
     # outputs
     fname = conf.get("local", "run_id") + "-" + "GVCF_" + chromosome + ".vcf"
     wf_files[fname] = File(fname)
-    j.uses(wf_files[fname], link=Link.OUTPUT, transfer=True)
+    j.uses(wf_files[fname], link=Link.OUTPUT, transfer=False)
     wf_files[fname + ".idx"] = File(fname + ".idx")
-    j.uses(wf_files[fname + ".idx"], link=Link.OUTPUT, transfer=True)
+    j.uses(wf_files[fname + ".idx"], link=Link.OUTPUT, transfer=False)
     
     j.addArguments("-T", "GenotypeGVCFs",
                    "-R", extract_fasta_basefile(ref_files),
@@ -633,7 +647,7 @@ def combine_variants(dax, software_file, ref_files, wf_files):
 
     add_executable(dax, "combine_variants", "gatk-wrapper")
     j = ComputeJob("combine_variants", cores = 1, mem_gb = 10,
-                   partition = "haplotype")
+                   partition = "part2")
     
     # inputs
     j.uses(software_file, link=Link.INPUT)
@@ -768,6 +782,9 @@ def generate_dax():
 
         # keep a list of samples for the GenotypeGVCFs call
         sample_names.append(sample_name)
+
+    # combine all haplotype_caller outputs into one merged file for output
+    merge_gvcf(dax, software_tar, ref_files, wf_files, sample_names)
     
     # run genotype_gvcfs per chromosome
     for i in range(1, 21):
