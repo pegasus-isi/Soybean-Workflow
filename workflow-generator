@@ -666,7 +666,6 @@ def combine_variants(dax, software_file, ref_files, wf_files):
     j.uses(wf_files[fname + ".idx"], link=Link.OUTPUT, transfer=True)
     
     j.addArguments("-T", "CombineVariants",
-                   "-genotypeMergeOptions", "UNIQUIFY",
                    "-R", extract_fasta_basefile(ref_files),
                    "-o", wf_files[fname])
     for i in range(1, 21):
