@@ -23,7 +23,7 @@
         <profile namespace="env" key="PEGASUS_HOME">/home1/00384/rynge/software/pegasus/4.4.0cvs</profile>
         <profile namespace="env" key="PATH">/home1/00384/rynge/software/pegasus/4.4.0cvs/bin:/home1/00384/rynge/software/irods/3.2/bin:/scratch/projects/xsede/globus-5.0.4-r1/bin:/usr/bin:/bin</profile>
         <profile namespace="env" key="LD_LIBRARY_PATH">/scratch/projects/xsede/globus-5.0.4-r1/lib</profile>
-        <profile namespace="globus" key="project">TG-MCB140044</profile>
+        <profile namespace="globus" key="project">TG-MCB110022</profile>
     </site>
     <site  handle="irods_iplant" arch="x86_64" os="LINUX">
         <profile namespace="pegasus" key="irodsEnvFile" >$home/irods.iplant.env</profile>
