@@ -14,10 +14,10 @@
         <grid  type="gt5" contact="login5.stampede.tacc.utexas.edu:2119/jobmanager-slurm" scheduler="Fork" jobtype="auxillary"/>
         <grid  type="gt5" contact="login5.stampede.tacc.utexas.edu:2119/jobmanager-slurm" scheduler="Condor" jobtype="compute"/>
         <directory type="shared-scratch" path="/scratch/02580/smk5g5/workflow-runs">
-            <file-server operation="all" url="file:///scratch/02580/smk5g5/workflow-runs"/>
+            <file-server operation="all" url="gsiftp://gridftp.stampede.tacc.xsede.org:2811/scratch/02580/smk5g5/workflow-runs"/>
         </directory>
-        <directory type="local-storage" path="/work/02580/smk5g5/workflow-outputs">
-            <file-server operation="all" url="file:///work/02580/smk5g5/workflow-outputs"/>
+        <directory type="local-storage" path="/scratch/02580/smk5g5/workflow-outputs">
+            <file-server operation="all" url="gsiftp://gridftp.stampede.tacc.xsede.org:2811/scratch/02580/smk5g5/workflow-outputs"/>
         </directory>
         <profile namespace="pegasus" key="job.aggregator">mpiexec</profile>
         <profile namespace="env" key="PEGASUS_HOME">/home1/00384/rynge/software/pegasus/4.4.0cvs</profile>
