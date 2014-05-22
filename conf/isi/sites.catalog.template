@@ -19,6 +19,9 @@
         <profile namespace="env" key="PATH">$irods_bin:/usr/bin:/bin</profile>
     </site>
     <site  handle="irods_iplant" arch="x86_64" os="LINUX">
+        <directory type="local-storage" path="/iplant/home/shared/digbio/Pegasus_GATK_Results/Output_DIR/$username">
+            <file-server operation="all" url="irods:///iplant/home/shared/digbio/Pegasus_GATK_Results/Output_DIR/$username" />
+        </directory>
         <profile namespace="pegasus" key="irodsEnvFile" >$home/irods.iplant.env</profile>
     </site>
     <site  handle="isi_workflow" arch="x86_64" os="LINUX">

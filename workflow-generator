@@ -75,48 +75,20 @@ class ComputeJob(Job):
         # compute nodes and the large memory ones to go to the large memory
         # nodes
         if re.search('stampede', conf.get("local", "exec_env")):
-            if re.search('largemem', partition):
-                hosts = conf.get("exec_environment", "hosts_largemem")
-                cores = str(32 * int(hosts))
-                self.addProfile(Profile(Namespace.GLOBUS,
-                                        key="queue",
-                                        value="largemem"))
-                self.addProfile(Profile(Namespace.GLOBUS,
-                                        key="hostcount",
-                                        value=hosts))
-                self.addProfile(Profile(Namespace.GLOBUS,
-                                        key="count",
-                                        value=cores))
-            elif re.search('haplotype', partition):
-                hosts = conf.get("exec_environment", "hosts_haplotype")
-                cores = str(16 * int(hosts))
-                self.addProfile(Profile(Namespace.GLOBUS,
-                                        key="queue",
-                                        value="normal"))
-                self.addProfile(Profile(Namespace.GLOBUS,
-                                        key="hostcount",
-                                        value=hosts))
-                self.addProfile(Profile(Namespace.GLOBUS,
-                                        key="count",
-                                        value=cores))
-                self.addProfile(Profile(Namespace.ENV,
-                                        key="PMC_HOST_MEMORY",
-                                        value="28000"))
-            else:
-                hosts = conf.get("exec_environment", "hosts_regular")
-                cores = str(16 * int(hosts))
-                self.addProfile(Profile(Namespace.GLOBUS,
-                                        key="queue",
-                                        value="normal"))
-                self.addProfile(Profile(Namespace.GLOBUS,
-                                        key="hostcount",
-                                        value=hosts))
-                self.addProfile(Profile(Namespace.GLOBUS,
-                                        key="count",
-                                        value=cores))
-                self.addProfile(Profile(Namespace.ENV,
-                                        key="PMC_HOST_MEMORY",
-                                        value="28000"))
+            hosts = conf.get("exec_environment", "hosts_" + partition)
+            cores = str(16 * int(hosts))
+            self.addProfile(Profile(Namespace.GLOBUS,
+                                    key="queue",
+                                    value="normal"))
+            self.addProfile(Profile(Namespace.GLOBUS,
+                                    key="hostcount",
+                                    value=hosts))
+            self.addProfile(Profile(Namespace.GLOBUS,
+                                    key="count",
+                                    value=cores))
+            self.addProfile(Profile(Namespace.ENV,
+                                    key="PMC_HOST_MEMORY",
+                                    value="29000"))
 
 
 # --- functions -----------------------------------------------------------------------
@@ -433,8 +405,8 @@ def select_and_filter_snp(dax, software_file, ref_files, wf_files,
     wf_files[intername] = File(intername) 
     
     add_executable(dax, "select_variants_snp", "gatk-wrapper")    
-    j = ComputeJob("select_variants_snp", cores = 15, mem_gb = 10,
-                   partition = "part2")
+    j = ComputeJob("select_variants_snp", cores = 14, mem_gb = 10,
+                   partition = "part3")
     
     # inputs
     j.uses(software_file, link=Link.INPUT)
@@ -456,7 +428,7 @@ def select_and_filter_snp(dax, software_file, ref_files, wf_files,
     
     add_executable(dax, "filtering_snp", "gatk-wrapper")    
     j = ComputeJob("filtering_snp", cores = 1, mem_gb = 10,
-                   partition = "part2")
+                   partition = "part3")
     
     # inputs
     j.uses(software_file, link=Link.INPUT)
@@ -487,8 +459,8 @@ def select_and_filter_indel(dax, software_file, ref_files, wf_files,
 
         
     add_executable(dax, "select_variants_indel", "gatk-wrapper")    
-    j = ComputeJob("select_variants_indel", cores = 15, mem_gb = 10,
-                   partition = "part2")
+    j = ComputeJob("select_variants_indel", cores = 14, mem_gb = 10,
+                   partition = "part3")
     
     # inputs
     j.uses(software_file, link=Link.INPUT)
@@ -510,7 +482,7 @@ def select_and_filter_indel(dax, software_file, ref_files, wf_files,
  
     add_executable(dax, "filtering_indel", "gatk-wrapper")    
     j = ComputeJob("filtering_indel", cores = 1, mem_gb = 10,
-                   partition = "part2")
+                   partition = "part3")
     
     # inputs
     j.uses(software_file, link=Link.INPUT)
@@ -568,7 +540,7 @@ def merge_gvcf(dax, software_file, ref_files, wf_files, sample_names):
 
     add_executable(dax, "merge_gcvf", "gatk-wrapper")
     j = ComputeJob("merge_gcvf", cores = 1, mem_gb = 10,
-                   partition = "part2")
+                   partition = "part3")
     
     # inputs
     files = []
@@ -647,7 +619,7 @@ def combine_variants(dax, software_file, ref_files, wf_files):
 
     add_executable(dax, "combine_variants", "gatk-wrapper")
     j = ComputeJob("combine_variants", cores = 1, mem_gb = 10,
-                   partition = "part2")
+                   partition = "part3")
     
     # inputs
     j.uses(software_file, link=Link.INPUT)
@@ -719,9 +691,9 @@ def generate_dax():
 
     # determine how many TACC compute nodes we need
     num_inputs_in_set = min(len(fastq_urls) / 2, 100)
-    conf.set("exec_environment", "hosts_regular", str( (num_inputs_in_set // 16 + 1) * 4 ))
-    conf.set("exec_environment", "hosts_largemem", str( (num_inputs_in_set // 32 + 1) ))
-    conf.set("exec_environment", "hosts_haplotype", str( (num_inputs_in_set // 16 + 1) * 4 ))
+    conf.set("exec_environment", "hosts_part1", str( (num_inputs_in_set // 16 + 1) * 4 ))
+    conf.set("exec_environment", "hosts_part2", str( (num_inputs_in_set // 16 + 1) * 4 ))
+    conf.set("exec_environment", "hosts_part3", str( 1 ))
 
     # we need to bring a copy of the software with us
     software_tar = File("software.tar.gz")
