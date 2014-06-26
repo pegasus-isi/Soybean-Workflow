@@ -12,6 +12,8 @@ OUTFILE=`mktemp -t gatk-output.XXXXXXXXXX` || exit 1
 OPTIONS="-Xmx7g -XX:+UseSerialGC"
 if (echo "'$@'" | grep -i "HaplotypeCaller") >/dev/null; then
     OPTIONS="-Xmx2g -XX:+UseSerialGC"
+elif (echo "'$@'" | grep -i "CombineGVCFs") >/dev/null; then
+    OPTIONS="-Xmx17g -XX:+UseSerialGC"
 fi
 OPTIONS="$OPTIONS -Djava.io.tmpdir=$TMPDIR"
 

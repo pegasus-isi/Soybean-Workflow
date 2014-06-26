@@ -1,12 +1,42 @@
 Soybean-Workflow
 ================
 
-This is an initial version of the Soybean workflow.
-
 Note that the Git repository does not include the software required for
 the jobs. For now, grab the software tarball from
 http://www.isi.edu/~rynge/soybean/software.tar.gz . Untar it in the 
-top level directory.
+woprkflow directory.
+
+The workflow is controlled by a configuration file named
+~/.soybean-workflow.conf . Create the file with this content:
+
+```
+# local refers to the submit host. Specify paths to a directory
+# which can be used by the workflow as work space, and locations
+# for local software installs.
+[local]
+
+work_dir = /local-scratch/%(username)s/soybean
+
+irods_bin = /ccg/software/irods/3.2/bin
+
+# tacc refers to configuration for the TACC Stampede 
+# supercomputer. To use this machine, you need an allocation
+# (start with TG-) and you also need to know your username
+# and storage group name for the system. The easiest way to 
+# obtain those is to log into the system, and run:
+# cds; pwd
+# This should return a path like: /scratch/00384/rynge. The
+# storage group is the second level, and your username is 
+# last level.
+[tacc]
+
+allocation = TG-ABC1234
+
+username = rynge
+
+storage_group = 00384
+
+```
 
 Basic files are pulled from the submit host with scp. This is to keep
 the requirements on the submit host light, and make it easy to run the

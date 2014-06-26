@@ -163,7 +163,11 @@ def generate_site_catalog():
                         top_dir = conf.get("local", "top_dir"),
                         work_dir = conf.get("local", "work_dir"),
                         pegasus_bin = conf.get("local", "pegasus_bin"),
-                        irods_bin = conf.get("local", "irods_bin")))
+                        irods_bin = conf.get("local", "irods_bin"),
+                        tacc_allocation = conf.get("tacc", "allocation"),
+                        tacc_username = conf.get("tacc", "username"),
+                        tacc_storage_group = conf.get("tacc", "storage_group"),
+              ))
     outf.close()
    
 
@@ -274,7 +278,7 @@ def alignment_to_reference(sample_name, dax, software_tar, ref_files, wf_files):
 def sort_sam(sample_name, dax, software_tar, ref_files, wf_files):
 
     add_executable(dax, "sort_sam", "picard-wrapper")
-    j = ComputeJob("sort_sam", cores = 1, mem_gb = 23, 
+    j = ComputeJob("sort_sam", cores = 1, mem_gb = 21, 
                    partition = "part1")
     j.uses(software_tar, link=Link.INPUT)
     j.uses(wf_files['sam'], link=Link.INPUT)
@@ -297,7 +301,7 @@ def sort_sam(sample_name, dax, software_tar, ref_files, wf_files):
 
 def dedup(sample_name, dax, software_tar, ref_files, wf_files):
     add_executable(dax, "dedup", "picard-wrapper")
-    j = ComputeJob("dedup", cores = 1, mem_gb = 23,
+    j = ComputeJob("dedup", cores = 1, mem_gb = 21,
                    partition = "part1")
     j.uses(software_tar, link=Link.INPUT)
     j.uses(wf_files['sorted_reads'], link=Link.INPUT)
@@ -322,7 +326,7 @@ def dedup(sample_name, dax, software_tar, ref_files, wf_files):
 
 def add_replace(sample_name, dax, software_tar, ref_files, wf_files):
     add_executable(dax, "add_replace", "picard-wrapper")
-    j = ComputeJob("add_replace", cores = 1, mem_gb = 23,
+    j = ComputeJob("add_replace", cores = 1, mem_gb = 21,
                    partition = "part1")
     j.uses(software_tar, link=Link.INPUT)
     j.uses(wf_files['deduped_reads'], link=Link.INPUT)
@@ -351,7 +355,7 @@ def add_replace(sample_name, dax, software_tar, ref_files, wf_files):
 
 def realign_target_creator(sample_name, dax, software_tar, ref_files, wf_files):
     add_executable(dax, "realign_target_creator", "gatk-wrapper")
-    j = ComputeJob("realign_target_creator", cores = 15, mem_gb = 11,
+    j = ComputeJob("realign_target_creator", cores = 15, mem_gb = 10,
                    partition = "part1")
     j.uses(software_tar, link=Link.INPUT)
     for f in ref_files:
@@ -373,7 +377,7 @@ def realign_target_creator(sample_name, dax, software_tar, ref_files, wf_files):
 def indel_realign(sample_name, dax, software_tar, ref_files, wf_files):
     # IndelRealigner can only be run single threaded
     add_executable(dax, "indel_realign", "gatk-wrapper")   
-    j = ComputeJob("indel_realign", cores = 1, mem_gb = 11,
+    j = ComputeJob("indel_realign", cores = 1, mem_gb = 10,
                    partition = "part1")
     j.uses(software_tar, link=Link.INPUT)
     for f in ref_files:
@@ -539,7 +543,7 @@ def haplotype_caller(sample_name, dax, software_file, ref_files, wf_files,
 def merge_gvcf(dax, software_file, ref_files, wf_files, sample_names):
 
     add_executable(dax, "merge_gcvf", "gatk-wrapper")
-    j = ComputeJob("merge_gcvf", cores = 1, mem_gb = 10,
+    j = ComputeJob("merge_gcvf", cores = 1, mem_gb = 20,
                    partition = "part3")
     
     # inputs
@@ -550,8 +554,8 @@ def merge_gvcf(dax, software_file, ref_files, wf_files, sample_names):
     for s in sample_names:
         for i in range(1, 21):
             fname = "%s-%s_Chr%02d.vcf" % (conf.get("local", "run_id"), s, i)
-            j.uses(wf_files[fname], link=Link.INPUT)
             j.uses(wf_files[fname + ".idx"], link=Link.INPUT)
+            j.uses(wf_files[fname], link=Link.INPUT)
             files.append(fname)
 
     # create filelist to minimize the length of the command line
@@ -791,7 +795,8 @@ def main():
 
     # read the config file and add those settings to the option object
     conf = ConfigParser.SafeConfigParser({'username': getpass.getuser()})
-    r = conf.read(["conf/local.conf", "conf/%s/site.conf" % options.exec_env])
+    r = conf.read([os.environ['HOME'] + "/.soybean-workflow.conf", \
+                  "conf/%s/site.conf" % options.exec_env])
     if len(r) != 2:
         logger.fatal("Unable to read configuration files for that environment")
         sys.exit(1)
@@ -802,7 +807,7 @@ def main():
 
     # run id
     conf.set("local", "run_id", time.strftime("%Y%m%d-%H%M%S", time.gmtime()))
-
+    
     # add the run id to the work dir
     conf.set("local", "work_dir", conf.get("local", "work_dir") + "/" + 
                                   conf.get("local", "run_id"))

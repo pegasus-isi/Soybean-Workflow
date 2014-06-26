@@ -6,4 +6,8 @@ if [ ! -d software ]; then
     tar xzf software.tar.gz
 fi
 
+# fix for leftover files in the home directory at TACC
+find ~/ -maxdepth 1 -name slurm.\* -mtime +5 -exec rm -f {} \; || /bin/true
+find ~/ -maxdepth 1 -name gram\*.log -mtime +5 -exec rm -f {} \; || /bin/true
+
 
