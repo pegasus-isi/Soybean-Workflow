@@ -48,11 +48,6 @@ class ComputeJob(Job):
                                 key="label",
                                 value=partition))
   
-        # required for the Pegasus accounting
-        self.addProfile(Profile(Namespace.PEGASUS,
-                                key="cores",
-                                value=str(cores)))
-  
         # standard resource requirements for all jobs
         mem_mb = mem_gb * 1000
         self.addProfile(Profile(Namespace.CONDOR,
@@ -89,6 +84,12 @@ class ComputeJob(Job):
             self.addProfile(Profile(Namespace.ENV,
                                     key="PMC_HOST_MEMORY",
                                     value="29000"))
+        
+        # required for the Pegasus accounting
+        self.addProfile(Profile(Namespace.PEGASUS,
+                                key="cores",
+                                value=str(cores)))
+  
 
 
 # --- functions -----------------------------------------------------------------------
