@@ -6,5 +6,15 @@ if [ ! -d software ]; then
     tar xzf software.tar.gz
 fi
 
+if [ "x$TMPDIR_OVERRIDE" != "x" ]; then
+   export TMPDIR="$TMPDIR_OVERRIDE"
+fi
+if [ "x$TMPDIR" = "x" ]; then
+   export TMPDIR=/tmp
+fi
+if [ ! -e "$TMPDIR" ]; then
+    mkdir -p $TMPDIR
+fi
+
 ./software/bwa-0.7.4/bwa "$@"
 

@@ -16,6 +16,7 @@
         <profile namespace="condor" key="requirements" >isUndefined(GLIDEIN_Entry_Name)</profile>
         <profile namespace="condor" key="+ProjectName" >"SoyKB"</profile>
         <profile namespace="env" key="PATH">$irods_bin:/usr/bin:/bin</profile>
+        <profile namespace="env" key="TMPDIR_OVERRIDE">/tmp</profile>
     </site>
     <site  handle="irods_iplant" arch="x86_64" os="LINUX">
         <directory type="local-storage" path="/iplant/home/shared/digbio/Pegasus_GATK_Results/Output_DIR/$username">

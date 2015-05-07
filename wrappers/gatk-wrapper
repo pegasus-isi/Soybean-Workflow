@@ -4,7 +4,15 @@ if [ ! -d software ]; then
     tar xzf software.tar.gz
 fi
 
-export TMPDIR=`pwd`
+if [ "x$TMPDIR_OVERRIDE" != "x" ]; then
+   export TMPDIR="$TMPDIR_OVERRIDE"
+fi
+if [ "x$TMPDIR" = "x" ]; then
+   export TMPDIR=/tmp
+fi
+if [ ! -e "$TMPDIR" ]; then
+    mkdir -p $TMPDIR
+fi
 
 OUTFILE=`mktemp -t gatk-output.XXXXXXXXXX` || exit 1
 
@@ -15,7 +23,7 @@ if (echo "'$@'" | grep -i "HaplotypeCaller") >/dev/null; then
 elif (echo "'$@'" | grep -i "CombineGVCFs") >/dev/null; then
     OPTIONS="-Xmx17g -XX:+UseSerialGC"
 fi
-OPTIONS="$OPTIONS -Djava.io.tmpdir=$TMPDIR"
+OPTIONS="-Djava.io.tmpdir=$TMPDIR $OPTIONS"
 
 java $OPTIONS \
      -jar ./software/GenomeAnalysisTK-3.0.0/GenomeAnalysisTK.jar \
