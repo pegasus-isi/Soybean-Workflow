@@ -1,2 +1,2 @@
-http://yggdrasil.isi.edu/~rynge/USB-067_1.fastq
-http://yggdrasil.isi.edu/~rynge/USB-067_2.fastq
+irods:///iplant/home/shared/digbio/test_pipeline/SRR1209394.fastq.gz
+

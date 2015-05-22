@@ -136,8 +136,8 @@ def proxy_check():
     r = p.returncode
     if r != 0:
         logger.error(stderrdata)
-        raise RuntimeError("Command '%s' failed with error code %s" \
-                           % (cmd_line, r))
+        raise RuntimeError("Unable to run the grid-proxy-info command." + \
+                           "Do you have a valid proxy?")
     timeleft = int(stdoutdata)
 
     # two weeks minimum lifetime
@@ -172,7 +172,7 @@ def generate_site_catalog():
     outf.close()
    
 
-def read_input_lists(ref_urls, fastq_urls):
+def read_input_lists(ref_urls, chromosomes, fastq_urls):
     """ The user provides a list of reference file URLs and pairs of fastq 
     URLs to be processed.
     """
@@ -181,20 +181,36 @@ def read_input_lists(ref_urls, fastq_urls):
     inf = open(conf.get("local", "top_dir") + "/inputs-ref.txt", "r")
     for line in inf.readlines():
         line = line.rstrip('\n')
-        ref_urls.append(line)
+        if len(line) > 0:
+            ref_urls.append(line)
     inf.close()
 
+    # chromosomes
+    inf = open(conf.get("local", "top_dir") + "/chromosomes.txt", "r")
+    for line in inf.readlines():
+        line = line.rstrip('\n')
+        line = re.sub("^> *", "", line)
+        line = re.sub(" .*", "", line)
+        if len(line) > 0:
+            logger.info("  Added chromosome: " + line)
+            chromosomes.append(line)
+    inf.close()
+    
     inf = open(conf.get("local", "top_dir") + "/inputs-fastq.txt", "r")
     for line in inf.readlines():
         line = line.rstrip('\n')
-        fastq_urls.append(line)
+        if len(line) > 0:
+            fastq_urls.append(line)
     inf.close()
 
     # sanity checks
+    if len(ref_urls) != 1:
+        logger.error("Only one reference genome can be listed in inputs-ref.txt");
+        sys.exit(1) 
     if len(fastq_urls) == 0:
         logger.error("Did not find fastq files")
         sys.exit(1)
-    if len(fastq_urls) % 2 != 0:
+    if conf.get("main", "inputs-style") == "double-end" and len(fastq_urls) % 2 != 0:
         logger.error("Found an uneven number of fastq files in input list")
         sys.exit(1)
 
@@ -223,6 +239,7 @@ def extract_sample_name(url):
     """
     name = re.sub(".*/", "", url)
     name = re.sub("_.*", "", name)
+    name = re.sub("\..*", "", name)
     return name
 
 
@@ -242,9 +259,99 @@ def add_executable(dax, logical_name, wrapper_name):
     dax.addExecutable(wrapper)
 
     added_execs.append(logical_name)
-    
 
-def alignment_to_reference(sample_name, dax, software_tar, ref_files, wf_files):
+
+def gunzip_job(dax, software_tar, f_in, f_out, parent_jobs=None):
+    """ adds a job to gunzip an input file
+    """
+    add_executable(dax, "gunzip", "gunzip-wrapper")
+    j = ComputeJob("gunzip", cores = 1, mem_gb = 2, partition = "part1")
+    j.uses(software_tar, link=Link.INPUT)
+    j.uses(f_in, link=Link.INPUT)
+    j.uses(f_out, link=Link.OUTPUT, transfer=False)
+    j.addArguments(f_in, f_out)
+    dax.addJob(j)
+    if parent_jobs is not None:
+        for parent in parent_jobs:
+            dax.depends(parent=parent, child=j)
+
+
+def prepare_ref_genome(dax, software_job, software_tar, ref_url, ref_files):
+    
+    # temp list of files we need to keep track of
+    files = {}
+   
+    lfn = extract_lfn(ref_url)
+    lfn_base = re.sub("\.[a-zA-Z0-9]+$", "", lfn)
+    lfn_ext = re.sub(".*\.", "", lfn)
+
+    j1 = None
+    if lfn_ext == "gz":
+        # add a job to gunzip the input
+        in_f = File(lfn)
+        in_f.addPFN(PFN(ref_url, "irods_iplant"))
+        dax.addFile(in_f)
+
+        fa_f = File(lfn_base + ".fa")
+        gunzip_job(dax, software_tar, in_f, fa_f, [software_job])
+
+        # update the lfn for subsequent jobs
+        lfn = lfn_base + ".fa"
+        lfn_ext = "fa"
+    elif lfn_ext == "fa":
+        # already a .fa file
+        fa_f = File(lfn)
+        fa_f.addPFN(PFN(ref_url, "irods_iplant"))
+        dax.addFile(in_f)
+    else:
+        logger.error("Unable to handle reference genome with %s extension" %(lfn_ext))
+        sys.exit(1)
+    files[fa_f.name] = fa_f
+   
+    # bwa index
+    add_executable(dax, "bwa-index", "bwa-wrapper")
+    j2 = ComputeJob("bwa-index", cores = 1, mem_gb = 4, partition = "part1")
+    j2.uses(software_tar, link=Link.INPUT)
+    j2.uses(fa_f, link=Link.INPUT)
+    for ext in [".amb", ".ann", ".bwt", ".pac", ".sa"]:
+        f = File(lfn + ext)
+        files[f.name] = f
+        j2.uses(f, link=Link.OUTPUT, transfer=False)
+    j2.addArguments("index", fa_f)
+    dax.addJob(j2)
+    if not j1:
+        dax.depends(parent=software_job, child=j2)
+    
+    # samtools faidx
+    add_executable(dax, "faidx", "samtools-wrapper")
+    j3 = ComputeJob("faidx", cores = 1, mem_gb = 4, partition = "part1")
+    j3.uses(software_tar, link=Link.INPUT)
+    j3.uses(fa_f, link=Link.INPUT)
+    f = File(lfn_base + ".fa.fai")
+    files[f.name] = f
+    j3.uses(f, link=Link.OUTPUT, transfer=False)
+    j3.addArguments("faidx", fa_f)
+    dax.addJob(j3)
+
+    # picard sequence dictionary
+    add_executable(dax, "seq_dict", "picard-wrapper")
+    j4 = ComputeJob("seq_dict", cores = 1, mem_gb = 4, partition = "part1")
+    j4.uses(software_tar, link=Link.INPUT)
+    j4.uses(fa_f, link=Link.INPUT)
+    f = File(lfn_base + ".dict")
+    files[f.name] = f
+    j4.uses(f, link=Link.OUTPUT, transfer=False)
+    j4.addArguments("CreateSequenceDictionary.jar", 
+                    "REFERENCE=" + fa_f.name,
+                    "OUTPUT=" + f.name)
+    dax.addJob(j4)
+
+    # populate the reference file list which the rest of the workflow needs
+    for key, f in files.iteritems():
+        ref_files.append(f)
+
+
+def alignment_to_reference(sample_name, dax, software_tar, chromosomes, ref_files, tracked_files):
     
     # Note that the cores we give Pegasus and the -t does not match. 
     # Oversubscriptions is ok, as bwa can not keep all the cores busy 100%
@@ -257,89 +364,94 @@ def alignment_to_reference(sample_name, dax, software_tar, ref_files, wf_files):
     for f in ref_files:
         j.uses(f, link=Link.INPUT)
     j.uses(software_tar, link=Link.INPUT)
-    j.uses(wf_files['paired_read1_fastq'], link=Link.INPUT)
-    j.uses(wf_files['paired_read2_fastq'], link=Link.INPUT)
-    j.uses(wf_files['sam'], link=Link.OUTPUT, transfer=False)
-    
-    j.setStdout(wf_files['sam'])
-    
-    j.addArguments("mem",
-                   "-t", "12",
-                   "-M", extract_fasta_basefile(ref_files), 
-                   wf_files['paired_read1_fastq'],
-                   wf_files['paired_read2_fastq'])
+    j.uses(tracked_files['sam'], link=Link.OUTPUT, transfer=False)
+    j.setStdout(tracked_files['sam'])
+        
+    if conf.get("main", "inputs-style") == "single-end":
+        # single-end inputs 
+        j.uses(tracked_files['fastq_input'], link=Link.INPUT)
+        j.addArguments("mem",
+                       "-t", "12",
+                       "-M", extract_fasta_basefile(ref_files), 
+                       tracked_files['fastq_input'])
+    else:
+        # pair-end inputs
+        j.uses(tracked_files['paired_read1_fastq'], link=Link.INPUT)
+        j.uses(tracked_files['paired_read2_fastq'], link=Link.INPUT)
+        j.addArguments("mem",
+                       "-t", "12",
+                       "-M", extract_fasta_basefile(ref_files), 
+                       tracked_files['paired_read1_fastq'],
+                       tracked_files['paired_read2_fastq'])
     dax.addJob(j)
 
     # next step    
-    sortsam_job = sort_sam(sample_name, dax, software_tar, ref_files, wf_files)
+    sortsam_job = sort_sam(sample_name, dax, software_tar, chromosomes, ref_files, tracked_files)
     
     return j
 
 
-def sort_sam(sample_name, dax, software_tar, ref_files, wf_files):
+def sort_sam(sample_name, dax, software_tar, chromosomes, ref_files, tracked_files):
 
     add_executable(dax, "sort_sam", "picard-wrapper")
     j = ComputeJob("sort_sam", cores = 1, mem_gb = 21, 
                    partition = "part1")
     j.uses(software_tar, link=Link.INPUT)
-    j.uses(wf_files['sam'], link=Link.INPUT)
-    j.uses(wf_files['sorted_reads'], link=Link.OUTPUT, transfer=False)
-    j.uses(wf_files['sorted_index'], link=Link.OUTPUT, transfer=False)
+    j.uses(tracked_files['sam'], link=Link.INPUT)
+    j.uses(tracked_files['sorted_reads'], link=Link.OUTPUT, transfer=False)
+    j.uses(tracked_files['sorted_index'], link=Link.OUTPUT, transfer=False)
     
     j.addArguments("SortSam.jar",
                    "CREATE_INDEX=TRUE",
                    "MAX_RECORDS_IN_RAM=5000000",
-                   "TMP_DIR=.",
-                   "I=" + wf_files['sam'].name,
-                   "O=" + wf_files['sorted_reads'].name,
+                   "I=" + tracked_files['sam'].name,
+                   "O=" + tracked_files['sorted_reads'].name,
                    "SO=coordinate",
                    "VALIDATION_STRINGENCY=LENIENT")
     dax.addJob(j)
     
-    dedup_job = dedup(sample_name, dax, software_tar, ref_files, wf_files)
+    dedup_job = dedup(sample_name, dax, software_tar, chromosomes, ref_files, tracked_files)
 
     
 
-def dedup(sample_name, dax, software_tar, ref_files, wf_files):
+def dedup(sample_name, dax, software_tar, chromosomes, ref_files, tracked_files):
     add_executable(dax, "dedup", "picard-wrapper")
     j = ComputeJob("dedup", cores = 1, mem_gb = 21,
                    partition = "part1")
     j.uses(software_tar, link=Link.INPUT)
-    j.uses(wf_files['sorted_reads'], link=Link.INPUT)
-    j.uses(wf_files['sorted_index'], link=Link.INPUT)
-    j.uses(wf_files['deduped_reads'], link=Link.OUTPUT, transfer=False)
-    j.uses(wf_files['deduped_index'], link=Link.OUTPUT, transfer=False)
-    #j.uses(wf_files['deduped_metrics'], link=Link.OUTPUT, transfer=False)
+    j.uses(tracked_files['sorted_reads'], link=Link.INPUT)
+    j.uses(tracked_files['sorted_index'], link=Link.INPUT)
+    j.uses(tracked_files['deduped_reads'], link=Link.OUTPUT, transfer=False)
+    j.uses(tracked_files['deduped_index'], link=Link.OUTPUT, transfer=False)
+    #j.uses(tracked_files['deduped_metrics'], link=Link.OUTPUT, transfer=False)
     
     j.addArguments("MarkDuplicates.jar",
                    "CREATE_INDEX=TRUE",
                    "MAX_RECORDS_IN_RAM=5000000",
-                   "TMP_DIR=.",
-                   "I=" + wf_files['sorted_reads'].name,
-                   "O=" + wf_files['deduped_reads'].name,
-                   "METRICS_FILE=" + wf_files['deduped_metrics'].name,
+                   "I=" + tracked_files['sorted_reads'].name,
+                   "O=" + tracked_files['deduped_reads'].name,
+                   "METRICS_FILE=" + tracked_files['deduped_metrics'].name,
                    "VALIDATION_STRINGENCY=LENIENT")
 
     dax.addJob(j)
 
-    add_replace(sample_name, dax, software_tar, ref_files, wf_files)
+    add_replace(sample_name, dax, software_tar, chromosomes, ref_files, tracked_files)
 
 
-def add_replace(sample_name, dax, software_tar, ref_files, wf_files):
+def add_replace(sample_name, dax, software_tar, chromosomes, ref_files, tracked_files):
     add_executable(dax, "add_replace", "picard-wrapper")
     j = ComputeJob("add_replace", cores = 1, mem_gb = 21,
                    partition = "part1")
     j.uses(software_tar, link=Link.INPUT)
-    j.uses(wf_files['deduped_reads'], link=Link.INPUT)
-    j.uses(wf_files['deduped_index'], link=Link.INPUT)
-    j.uses(wf_files['addrepl_reads'], link=Link.OUTPUT, transfer=True)
-    j.uses(wf_files['addrepl_index'], link=Link.OUTPUT, transfer=True)
+    j.uses(tracked_files['deduped_reads'], link=Link.INPUT)
+    j.uses(tracked_files['deduped_index'], link=Link.INPUT)
+    j.uses(tracked_files['addrepl_reads'], link=Link.OUTPUT, transfer=True)
+    j.uses(tracked_files['addrepl_index'], link=Link.OUTPUT, transfer=True)
     
     j.addArguments("AddOrReplaceReadGroups.jar",
                    "MAX_RECORDS_IN_RAM=5000000",
-                   "TMP_DIR=.",
-                   "I=" + wf_files['deduped_reads'].name,
-                   "O=" + wf_files['addrepl_reads'].name,
+                   "I=" + tracked_files['deduped_reads'].name,
+                   "O=" + tracked_files['addrepl_reads'].name,
                    "RGID=" + sample_name,
                    "LB=" + sample_name,
                    "PL=\"Illumina\"",
@@ -351,31 +463,31 @@ def add_replace(sample_name, dax, software_tar, ref_files, wf_files):
                    "CREATE_INDEX=TRUE")
     dax.addJob(j)
     
-    realign_target_creator(sample_name, dax, software_tar, ref_files, wf_files)
+    realign_target_creator(sample_name, dax, software_tar, chromosomes, ref_files, tracked_files)
 
 
-def realign_target_creator(sample_name, dax, software_tar, ref_files, wf_files):
+def realign_target_creator(sample_name, dax, software_tar, chromosomes, ref_files, tracked_files):
     add_executable(dax, "realign_target_creator", "gatk-wrapper")
     j = ComputeJob("realign_target_creator", cores = 15, mem_gb = 10,
                    partition = "part1")
     j.uses(software_tar, link=Link.INPUT)
     for f in ref_files:
         j.uses(f, link=Link.INPUT)
-    j.uses(wf_files['addrepl_reads'], link=Link.INPUT)
-    j.uses(wf_files['addrepl_index'], link=Link.INPUT)
-    j.uses(wf_files['intervals'], link=Link.OUTPUT, transfer=False)
+    j.uses(tracked_files['addrepl_reads'], link=Link.INPUT)
+    j.uses(tracked_files['addrepl_index'], link=Link.INPUT)
+    j.uses(tracked_files['intervals'], link=Link.OUTPUT, transfer=False)
     
     j.addArguments("-T", "RealignerTargetCreator",
                    "-nt", "15",
                    "-R", extract_fasta_basefile(ref_files),
-                   "-I", wf_files['addrepl_reads'],
-                   "-o", wf_files['intervals']) 
+                   "-I", tracked_files['addrepl_reads'],
+                   "-o", tracked_files['intervals']) 
     dax.addJob(j)
     
-    indel_realign(sample_name, dax, software_tar, ref_files, wf_files)
+    indel_realign(sample_name, dax, software_tar, chromosomes, ref_files, tracked_files)
     
 
-def indel_realign(sample_name, dax, software_tar, ref_files, wf_files):
+def indel_realign(sample_name, dax, software_tar, chromosomes, ref_files, tracked_files):
     # IndelRealigner can only be run single threaded
     add_executable(dax, "indel_realign", "gatk-wrapper")   
     j = ComputeJob("indel_realign", cores = 1, mem_gb = 10,
@@ -383,31 +495,30 @@ def indel_realign(sample_name, dax, software_tar, ref_files, wf_files):
     j.uses(software_tar, link=Link.INPUT)
     for f in ref_files:
         j.uses(f, link=Link.INPUT)
-    j.uses(wf_files['addrepl_reads'], link=Link.INPUT)
-    j.uses(wf_files['addrepl_index'], link=Link.INPUT)
-    j.uses(wf_files['intervals'], link=Link.INPUT)
-    j.uses(wf_files['indel_realigned_reads'], link=Link.OUTPUT, transfer=True)
-    j.uses(wf_files['indel_realigned_index'], link=Link.OUTPUT, transfer=True)
+    j.uses(tracked_files['addrepl_reads'], link=Link.INPUT)
+    j.uses(tracked_files['addrepl_index'], link=Link.INPUT)
+    j.uses(tracked_files['intervals'], link=Link.INPUT)
+    j.uses(tracked_files['indel_realigned_reads'], link=Link.OUTPUT, transfer=True)
+    j.uses(tracked_files['indel_realigned_index'], link=Link.OUTPUT, transfer=True)
     
     j.addArguments("-T", "IndelRealigner",
                    "-R", extract_fasta_basefile(ref_files),
-                   "-I", wf_files['addrepl_reads'],
-                   "-targetIntervals", wf_files['intervals'],
-                   "-o", wf_files['indel_realigned_reads'])
+                   "-I", tracked_files['addrepl_reads'],
+                   "-targetIntervals", tracked_files['intervals'],
+                   "-o", tracked_files['indel_realigned_reads'])
     dax.addJob(j)
     
-    for i in range(1, 21):
-        chromosome = "Chr%02d" %(i)
+    for chr in chromosomes:
         haplotype_caller(sample_name, dax, software_tar,
-                         ref_files, wf_files, chromosome)
+                         ref_files, tracked_files, chr)
 
 
-def select_and_filter_snp(dax, software_file, ref_files, wf_files,
+def select_and_filter_snp(dax, software_file, ref_files, tracked_files,
                           in_file, out_file, out_idx):
     
     # we need an intermediate file
     intername = re.sub(".*/", "", in_file.name) + "_snp_only.vcf"
-    wf_files[intername] = File(intername) 
+    tracked_files[intername] = File(intername) 
     
     add_executable(dax, "select_variants_snp", "gatk-wrapper")    
     j = ComputeJob("select_variants_snp", cores = 14, mem_gb = 10,
@@ -420,14 +531,14 @@ def select_and_filter_snp(dax, software_file, ref_files, wf_files,
     j.uses(in_file, link=Link.INPUT)
 
     # outputs
-    j.uses(wf_files[intername], link=Link.OUTPUT, transfer=False)
+    j.uses(tracked_files[intername], link=Link.OUTPUT, transfer=False)
     
     j.addArguments("-T", "SelectVariants",
                    "-nt", "15",
                    "-R", extract_fasta_basefile(ref_files),
                    "-selectType", "SNP",
                    "-V", in_file,
-                   "-o", wf_files[intername])
+                   "-o", tracked_files[intername])
     
     dax.addJob(j)
     
@@ -439,7 +550,7 @@ def select_and_filter_snp(dax, software_file, ref_files, wf_files,
     j.uses(software_file, link=Link.INPUT)
     for f in ref_files:
         j.uses(f, link=Link.INPUT)
-    j.uses(wf_files[intername], link=Link.INPUT)
+    j.uses(tracked_files[intername], link=Link.INPUT)
 
     # outputs
     j.uses(out_file, link=Link.OUTPUT, transfer=True)
@@ -447,20 +558,20 @@ def select_and_filter_snp(dax, software_file, ref_files, wf_files,
     
     j.addArguments("-T", "VariantFiltration",
                    "-R", extract_fasta_basefile(ref_files),
-                   "-V", wf_files[intername],
-                   "--filterExpression", "'QD < 2.0 || FS > 60.0 || MQ < 40.0  || Haplotypescore > 20.0'",
+                   "-V", tracked_files[intername],
+                   "--filterExpression", "'" + conf.get("main", "snp_filter") + "'",
                    "--filterName", "my_snp_filter",
                    "-o", out_file)
 
     dax.addJob(j)
 
 
-def select_and_filter_indel(dax, software_file, ref_files, wf_files,
+def select_and_filter_indel(dax, software_file, ref_files, tracked_files,
                             in_file, out_file, out_idx):
 
     # we need an intermediate file
     intername = re.sub(".*/", "", in_file.name) + "_indel_only.vcf"
-    wf_files[intername] = File(intername) 
+    tracked_files[intername] = File(intername) 
 
         
     add_executable(dax, "select_variants_indel", "gatk-wrapper")    
@@ -474,14 +585,14 @@ def select_and_filter_indel(dax, software_file, ref_files, wf_files,
     j.uses(in_file, link=Link.INPUT)
 
     # outputs
-    j.uses(wf_files[intername], link=Link.OUTPUT, transfer=False)
+    j.uses(tracked_files[intername], link=Link.OUTPUT, transfer=False)
     
     j.addArguments("-T", "SelectVariants",
                    "-nt", "15",
                    "-R", extract_fasta_basefile(ref_files),
                    "-selectType", "INDEL",
                    "-V", in_file,
-                   "-o", wf_files[intername])
+                   "-o", tracked_files[intername])
  
     dax.addJob(j)
  
@@ -493,7 +604,7 @@ def select_and_filter_indel(dax, software_file, ref_files, wf_files,
     j.uses(software_file, link=Link.INPUT)
     for f in ref_files:
         j.uses(f, link=Link.INPUT)
-    j.uses(wf_files[intername], link=Link.INPUT)
+    j.uses(tracked_files[intername], link=Link.INPUT)
 
     # outputs
     j.uses(out_file, link=Link.OUTPUT, transfer=True)
@@ -501,15 +612,15 @@ def select_and_filter_indel(dax, software_file, ref_files, wf_files,
     
     j.addArguments("-T", "VariantFiltration",
                    "-R", extract_fasta_basefile(ref_files),
-                   "-V", wf_files[intername],
-                   "--filterExpression", "'QD < 2.0 || FS > 200.0 || MQ < 40 || Haplotypescore > 20.0'",
+                   "-V", tracked_files[intername],
+                   "--filterExpression", "'" + conf.get("main", "indel_filter") + "'",
                    "--filterName", "my_indel_filter",
                    "-o", out_file)
  
     dax.addJob(j)
 
 
-def haplotype_caller(sample_name, dax, software_file, ref_files, wf_files,
+def haplotype_caller(sample_name, dax, software_file, ref_files, tracked_files,
                      chromosome):
 
     add_executable(dax, "haplotype_caller", "gatk-wrapper")
@@ -520,15 +631,15 @@ def haplotype_caller(sample_name, dax, software_file, ref_files, wf_files,
     j.uses(software_file, link=Link.INPUT)
     for f in ref_files:
         j.uses(f, link=Link.INPUT)
-    j.uses(wf_files['indel_realigned_reads'], link=Link.INPUT)
-    j.uses(wf_files['indel_realigned_index'], link=Link.INPUT)
+    j.uses(tracked_files['indel_realigned_reads'], link=Link.INPUT)
+    j.uses(tracked_files['indel_realigned_index'], link=Link.INPUT)
 
     # outputs
     fname = conf.get("local", "run_id") + "-" + sample_name + "_" + chromosome + ".vcf"
-    wf_files[fname] = File(fname)
-    j.uses(wf_files[fname], link=Link.OUTPUT, transfer=False)
-    wf_files[fname + ".idx"] = File(fname + ".idx")
-    j.uses(wf_files[fname + ".idx"], link=Link.OUTPUT, transfer=False)
+    tracked_files[fname] = File(fname)
+    j.uses(tracked_files[fname], link=Link.OUTPUT, transfer=False)
+    tracked_files[fname + ".idx"] = File(fname + ".idx")
+    j.uses(tracked_files[fname + ".idx"], link=Link.OUTPUT, transfer=False)
     
     j.addArguments("-T", "HaplotypeCaller",
                    "--emitRefConfidence", "GVCF",
@@ -536,12 +647,12 @@ def haplotype_caller(sample_name, dax, software_file, ref_files, wf_files,
                    "--variant_index_parameter", "128000",
                    "-L", chromosome,
                    "-R", extract_fasta_basefile(ref_files),
-                   "-I", wf_files['indel_realigned_reads'],
-                   "-o", wf_files[fname])
+                   "-I", tracked_files['indel_realigned_reads'],
+                   "-o", tracked_files[fname])
     dax.addJob(j)
 
 
-def merge_gvcf(dax, software_file, ref_files, wf_files, sample_names):
+def merge_gvcf(dax, software_file, chromosomes, ref_files, tracked_files, sample_names):
 
     add_executable(dax, "merge_gcvf", "gatk-wrapper")
     j = ComputeJob("merge_gcvf", cores = 1, mem_gb = 20,
@@ -553,10 +664,10 @@ def merge_gvcf(dax, software_file, ref_files, wf_files, sample_names):
     for f in ref_files:
         j.uses(f, link=Link.INPUT)
     for s in sample_names:
-        for i in range(1, 21):
-            fname = "%s-%s_Chr%02d.vcf" % (conf.get("local", "run_id"), s, i)
-            j.uses(wf_files[fname + ".idx"], link=Link.INPUT)
-            j.uses(wf_files[fname], link=Link.INPUT)
+        for chr in chromosomes:
+            fname = "%s-%s_%s.vcf" % (conf.get("local", "run_id"), s, chr)
+            j.uses(tracked_files[fname + ".idx"], link=Link.INPUT)
+            j.uses(tracked_files[fname], link=Link.INPUT)
             files.append(fname)
 
     # create filelist to minimize the length of the command line
@@ -571,20 +682,20 @@ def merge_gvcf(dax, software_file, ref_files, wf_files, sample_names):
 
     # outputs
     fname = conf.get("local", "run_id") + "-mergeGVCF.vcf"
-    wf_files[fname] = File(fname)
-    j.uses(wf_files[fname], link=Link.OUTPUT, transfer=True)
-    wf_files[fname + ".idx"] = File(fname + ".idx")
-    j.uses(wf_files[fname + ".idx"], link=Link.OUTPUT, transfer=True)
+    tracked_files[fname] = File(fname)
+    j.uses(tracked_files[fname], link=Link.OUTPUT, transfer=True)
+    tracked_files[fname + ".idx"] = File(fname + ".idx")
+    j.uses(tracked_files[fname + ".idx"], link=Link.OUTPUT, transfer=True)
     
     j.addArguments("-T", "CombineGVCFs",
                    "-R", extract_fasta_basefile(ref_files),
-                   "-o", wf_files[fname],
+                   "-o", tracked_files[fname],
                    "--variant", "haplotype-files.list")
     
     dax.addJob(j)
 
 
-def genotype_gvcfs(dax, software_file, ref_files, wf_files, sample_names,
+def genotype_gvcfs(dax, software_file, ref_files, tracked_files, sample_names,
                    chromosome):
 
     add_executable(dax, "genotype_gvcfs", "gatk-wrapper")
@@ -598,21 +709,21 @@ def genotype_gvcfs(dax, software_file, ref_files, wf_files, sample_names,
         j.uses(f, link=Link.INPUT)
     for sname in sample_names:
         fname = conf.get("local", "run_id") + "-" + sname + "_" + chromosome + ".vcf"
-        f = wf_files[fname]
+        f = tracked_files[fname]
         j.uses(f, link=Link.INPUT)
-        j.uses(wf_files[fname + ".idx"], link=Link.INPUT)
+        j.uses(tracked_files[fname + ".idx"], link=Link.INPUT)
         variant_files.append(f)
 
     # outputs
     fname = conf.get("local", "run_id") + "-" + "GVCF_" + chromosome + ".vcf"
-    wf_files[fname] = File(fname)
-    j.uses(wf_files[fname], link=Link.OUTPUT, transfer=False)
-    wf_files[fname + ".idx"] = File(fname + ".idx")
-    j.uses(wf_files[fname + ".idx"], link=Link.OUTPUT, transfer=False)
+    tracked_files[fname] = File(fname)
+    j.uses(tracked_files[fname], link=Link.OUTPUT, transfer=False)
+    tracked_files[fname + ".idx"] = File(fname + ".idx")
+    j.uses(tracked_files[fname + ".idx"], link=Link.OUTPUT, transfer=False)
     
     j.addArguments("-T", "GenotypeGVCFs",
                    "-R", extract_fasta_basefile(ref_files),
-                   "-o", wf_files[fname],
+                   "-o", tracked_files[fname],
                    "-L", chromosome)
     for f in variant_files:
         j.addArguments("--variant", f)
@@ -620,7 +731,7 @@ def genotype_gvcfs(dax, software_file, ref_files, wf_files, sample_names,
     dax.addJob(j)
     
 
-def combine_variants(dax, software_file, ref_files, wf_files):
+def combine_variants(dax, software_file, chromosomes, ref_files, tracked_files):
 
     add_executable(dax, "combine_variants", "gatk-wrapper")
     j = ComputeJob("combine_variants", cores = 1, mem_gb = 10,
@@ -630,45 +741,45 @@ def combine_variants(dax, software_file, ref_files, wf_files):
     j.uses(software_file, link=Link.INPUT)
     for f in ref_files:
         j.uses(f, link=Link.INPUT)
-    for i in range(1, 21):
-        fname = conf.get("local", "run_id") + "-" + "GVCF_Chr%02d.vcf" % (i)
-        j.uses(wf_files[fname], link=Link.INPUT)
-        j.uses(wf_files[fname + ".idx"], link=Link.INPUT)
+    for chr in chromosomes:
+        fname = conf.get("local", "run_id") + "-" + "GVCF_%s.vcf" % (chr)
+        j.uses(tracked_files[fname], link=Link.INPUT)
+        j.uses(tracked_files[fname + ".idx"], link=Link.INPUT)
 
     # outputs
     fname = conf.get("local", "run_id") + "-" + "All.vcf"
-    wf_files[fname] = File(fname)
-    j.uses(wf_files[fname], link=Link.OUTPUT, transfer=True)
-    wf_files[fname + ".idx"] = File(fname + ".idx")
-    j.uses(wf_files[fname + ".idx"], link=Link.OUTPUT, transfer=True)
+    tracked_files[fname] = File(fname)
+    j.uses(tracked_files[fname], link=Link.OUTPUT, transfer=True)
+    tracked_files[fname + ".idx"] = File(fname + ".idx")
+    j.uses(tracked_files[fname + ".idx"], link=Link.OUTPUT, transfer=True)
     
     j.addArguments("-T", "CombineVariants",
                    "-R", extract_fasta_basefile(ref_files),
-                   "-o", wf_files[fname])
-    for i in range(1, 21):
-        fname = conf.get("local", "run_id") + "-" + "GVCF_Chr%02d.vcf" % (i)
-        j.addArguments("--variant", wf_files[fname])
+                   "-o", tracked_files[fname])
+    for chr in chromosomes:
+        fname = conf.get("local", "run_id") + "-" + "GVCF_%s.vcf" % (chr)
+        j.addArguments("--variant", tracked_files[fname])
     
     dax.addJob(j)
 
     # filter the results    
-    wf_files[conf.get("local", "run_id") + "-" + 'All_filtered_snp.vcf'] = \
+    tracked_files[conf.get("local", "run_id") + "-" + 'All_filtered_snp.vcf'] = \
             File(conf.get("local", "run_id") + "-" + "All_filtered_snp.vcf")
-    wf_files[conf.get("local", "run_id") + "-" + 'All_filtered_snp.vcf.idx'] = \
+    tracked_files[conf.get("local", "run_id") + "-" + 'All_filtered_snp.vcf.idx'] = \
             File(conf.get("local", "run_id") + "-" + "All_filtered_snp.vcf.idx")
-    select_and_filter_snp(dax, software_file, ref_files, wf_files,
-                          wf_files[conf.get("local", "run_id") + "-" + 'All.vcf'],
-                          wf_files[conf.get("local", "run_id") + "-" + 'All_filtered_snp.vcf'],
-                          wf_files[conf.get("local", "run_id") + "-" + 'All_filtered_snp.vcf.idx'])
+    select_and_filter_snp(dax, software_file, ref_files, tracked_files,
+                          tracked_files[conf.get("local", "run_id") + "-" + 'All.vcf'],
+                          tracked_files[conf.get("local", "run_id") + "-" + 'All_filtered_snp.vcf'],
+                          tracked_files[conf.get("local", "run_id") + "-" + 'All_filtered_snp.vcf.idx'])
     
-    wf_files[conf.get("local", "run_id") + "-" + 'All_filtered_indel.vcf'] = \
+    tracked_files[conf.get("local", "run_id") + "-" + 'All_filtered_indel.vcf'] = \
             File(conf.get("local", "run_id") + "-" + "All_filtered_indel.vcf")
-    wf_files[conf.get("local", "run_id") + "-" + 'All_filtered_indel.vcf.idx'] = \
+    tracked_files[conf.get("local", "run_id") + "-" + 'All_filtered_indel.vcf.idx'] = \
             File(conf.get("local", "run_id") + "-" + "All_filtered_indel.vcf.idx")
-    select_and_filter_indel(dax, software_file, ref_files, wf_files,
-                            wf_files[conf.get("local", "run_id") + "-" + 'All.vcf'],
-                            wf_files[conf.get("local", "run_id") + "-" + 'All_filtered_indel.vcf'],
-                            wf_files[conf.get("local", "run_id") + "-" + 'All_filtered_indel.vcf.idx'])
+    select_and_filter_indel(dax, software_file, ref_files, tracked_files,
+                            tracked_files[conf.get("local", "run_id") + "-" + 'All.vcf'],
+                            tracked_files[conf.get("local", "run_id") + "-" + 'All_filtered_indel.vcf'],
+                            tracked_files[conf.get("local", "run_id") + "-" + 'All_filtered_indel.vcf.idx'])
 
 
 def generate_dax():
@@ -691,8 +802,9 @@ def generate_dax():
                        "/../share/pegasus/notification/email")
     
     ref_urls = []
+    chromosomes = []
     fastq_urls = []
-    read_input_lists(ref_urls, fastq_urls)
+    read_input_lists(ref_urls, chromosomes, fastq_urls)
 
     # determine how many TACC compute nodes we need
     num_inputs_in_set = min(len(fastq_urls) / 2, 100)
@@ -710,65 +822,81 @@ def generate_dax():
     dax.addJob(software_job)
 
     # we need to track files across jobs
-    wf_files = {}
+    tracked_files = {}
     sample_names = []
     
-    # reference genome    
+    # reference genome - add some jobs to prepare reference genome
     ref_files = []
-    for url in ref_urls:
-        f = File(extract_lfn(url))
-        f.addPFN(PFN(url, "irods_iplant"))
-        dax.addFile(f)
-        # put these in a list so jobs can pick them up
-        ref_files.append(f)
+    prepare_ref_genome(dax, software_job, software_tar, ref_urls[0], ref_files)
 
-    for lane in range(len(fastq_urls) / 2):
+    lane_count = len(fastq_urls)
+    if conf.get("main", "inputs-style") == "pair-end":
+        lane_count = len(fastq_urls) / 2
 
-        # input files for this lane   
-        wf_files['paired_read1_fastq'] = File(extract_lfn(fastq_urls[lane * 2]))
-        wf_files['paired_read1_fastq'].addPFN(PFN(fastq_urls[lane * 2], "irods_iplant"))
-        dax.addFile(wf_files['paired_read1_fastq'])
+    for lane in range(lane_count):
 
-        wf_files['paired_read2_fastq'] = File(extract_lfn(fastq_urls[lane * 2 + 1]))
-        wf_files['paired_read2_fastq'].addPFN(PFN(fastq_urls[lane * 2 + 1], "irods_iplant"))
-        dax.addFile(wf_files['paired_read2_fastq'])
-
-        sample_name = extract_sample_name(wf_files['paired_read1_fastq'].name)
+        # input files for this lane
+        if conf.get("main", "inputs-style") == "single-end":
+            lfn = extract_lfn(fastq_urls[lane])
+            if re.search("\.gz$", lfn):
+                f_gz = File(extract_lfn(fastq_urls[lane]))
+                f_gz.addPFN(PFN(fastq_urls[lane], "irods_iplant"))
+                dax.addFile(f_gz)
+                fa_name = extract_lfn(fastq_urls[lane])
+                fa_name = re.sub("\..*", ".fa", fa_name)
+                f_fa = File(fa_name)
+                gunzip_job(dax, software_tar, f_gz, f_fa, [software_job])
+            else:
+                f_fa = File(extract_lfn(fastq_urls[lane]))
+                f_fa.addPFN(PFN(fastq_urls[lane], "irods_iplant"))
+                dax.addFile(f_fa)
+            tracked_files['fastq_input'] = f_fa
+            sample_name = extract_sample_name(tracked_files['fastq_input'].name)
+        else:
+            tracked_files['paired_read1_fastq'] = File(extract_lfn(fastq_urls[lane * 2]))
+            tracked_files['paired_read1_fastq'].addPFN(PFN(fastq_urls[lane * 2], "irods_iplant"))
+            dax.addFile(tracked_files['paired_read1_fastq'])
+    
+            tracked_files['paired_read2_fastq'] = File(extract_lfn(fastq_urls[lane * 2 + 1]))
+            tracked_files['paired_read2_fastq'].addPFN(PFN(fastq_urls[lane * 2 + 1], "irods_iplant"))
+            dax.addFile(tracked_files['paired_read2_fastq'])
+    
+            sample_name = extract_sample_name(tracked_files['paired_read1_fastq'].name)
 
         # files we need to track
-        wf_files['sam'] = File(conf.get("local", "run_id") + "-" + sample_name + "_aligned_reads.sam")
-        wf_files['sorted_reads'] = File(conf.get("local", "run_id") + "-" + sample_name + "_sorted_reads.bam")
-        wf_files['sorted_index'] = File(conf.get("local", "run_id") + "-" + sample_name + "_sorted_reads.bai")
-        wf_files['deduped_reads'] = File(conf.get("local", "run_id") + "-" + sample_name + "_deduped_reads.bam")
-        wf_files['deduped_index'] = File(conf.get("local", "run_id") + "-" + sample_name + "_deduped_reads.bai")
-        wf_files['deduped_metrics'] = File(conf.get("local", "run_id") + "-" + sample_name + "_deduped.metrics")
-        wf_files['addrepl_reads'] = File(conf.get("local", "run_id") + "-" + sample_name + "_addrepl.bam")
-        wf_files['addrepl_index'] = File(conf.get("local", "run_id") + "-" + sample_name + "_addrepl.bai")
-        wf_files['intervals'] = File(conf.get("local", "run_id") + "-" + sample_name + "_intervals.list")
-        wf_files['indel_realigned_reads'] = File(conf.get("local", "run_id") + "-" + sample_name + "_indel_realigned.bam")
-        wf_files['indel_realigned_index'] = File(conf.get("local", "run_id") + "-" + sample_name + "_indel_realigned.bai")
+        tracked_files['sam'] = File(conf.get("local", "run_id") + "-" + sample_name + "_aligned_reads.sam")
+        tracked_files['sorted_reads'] = File(conf.get("local", "run_id") + "-" + sample_name + "_sorted_reads.bam")
+        tracked_files['sorted_index'] = File(conf.get("local", "run_id") + "-" + sample_name + "_sorted_reads.bai")
+        tracked_files['deduped_reads'] = File(conf.get("local", "run_id") + "-" + sample_name + "_deduped_reads.bam")
+        tracked_files['deduped_index'] = File(conf.get("local", "run_id") + "-" + sample_name + "_deduped_reads.bai")
+        tracked_files['deduped_metrics'] = File(conf.get("local", "run_id") + "-" + sample_name + "_deduped.metrics")
+        tracked_files['addrepl_reads'] = File(conf.get("local", "run_id") + "-" + sample_name + "_addrepl.bam")
+        tracked_files['addrepl_index'] = File(conf.get("local", "run_id") + "-" + sample_name + "_addrepl.bai")
+        tracked_files['intervals'] = File(conf.get("local", "run_id") + "-" + sample_name + "_intervals.list")
+        tracked_files['indel_realigned_reads'] = File(conf.get("local", "run_id") + "-" + sample_name + "_indel_realigned.bam")
+        tracked_files['indel_realigned_index'] = File(conf.get("local", "run_id") + "-" + sample_name + "_indel_realigned.bai")
     
         # Step 1 - dependent jobs are now added in the parent jobs
         align_job = alignment_to_reference(sample_name,
                                            dax,
                                            software_tar,
+                                           chromosomes,
                                            ref_files,
-                                           wf_files)
+                                           tracked_files)
         dax.depends(parent=software_job, child=align_job)
 
         # keep a list of samples for the GenotypeGVCFs call
         sample_names.append(sample_name)
 
     # combine all haplotype_caller outputs into one merged file for output
-    merge_gvcf(dax, software_tar, ref_files, wf_files, sample_names)
+    merge_gvcf(dax, software_tar, chromosomes, ref_files, tracked_files, sample_names)
     
     # run genotype_gvcfs per chromosome
-    for i in range(1, 21):
-        chromosome = "Chr%02d" %(i)
-        genotype_gvcfs(dax, software_tar, ref_files, wf_files,
-                       sample_names, chromosome)
+    for chr in chromosomes:
+        genotype_gvcfs(dax, software_tar, ref_files, tracked_files,
+                       sample_names, chr)
         
-    combine_variants(dax, software_tar, ref_files, wf_files)
+    combine_variants(dax, software_tar, chromosomes, ref_files, tracked_files)
  
     # write out the dax
     dax_file = open(conf.get("local", "work_dir") + "/soykb.dax", "w")
@@ -797,9 +925,16 @@ def main():
     # read the config file and add those settings to the option object
     conf = ConfigParser.SafeConfigParser({'username': getpass.getuser()})
     r = conf.read([os.environ['HOME'] + "/.soybean-workflow.conf", \
+                  "conf/main.conf", \
                   "conf/%s/site.conf" % options.exec_env])
-    if len(r) != 2:
+    if len(r) != 3:
         logger.fatal("Unable to read configuration files for that environment")
+        sys.exit(1)
+
+    if conf.get("main", "inputs-style") != "single-end" and \
+       conf.get("main", "inputs-style") != "double-end":
+        logger.fatal("Valid choicses for the main/inputs-style configuration is" + \
+                     " single-end or double-end")
         sys.exit(1)
 
     conf.set("local", "username", getpass.getuser())

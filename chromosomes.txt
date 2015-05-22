@@ -1,0 +1,12 @@
+>10 dna:chromosome chromosome:AGPv3:10:1:149632204:1
+>9 dna:chromosome chromosome:AGPv3:9:1:157038028:1
+>6 dna:chromosome chromosome:AGPv3:6:1:169407836:1
+>8 dna:chromosome chromosome:AGPv3:8:1:175377492:1
+>7 dna:chromosome chromosome:AGPv3:7:1:176826311:1
+>5 dna:chromosome chromosome:AGPv3:5:1:217959525:1
+>3 dna:chromosome chromosome:AGPv3:3:1:232245527:1
+>2 dna:chromosome chromosome:AGPv3:2:1:237917468:1
+>4 dna:chromosome chromosome:AGPv3:4:1:242062272:1
+>1 dna:chromosome chromosome:AGPv3:1:1:301476924:1
+>Pt dna:chromosome chromosome:AGPv3t:1:140384:1
+>Mt dna:chromosome chromosome:AGPv3:Mt:1:569630:1

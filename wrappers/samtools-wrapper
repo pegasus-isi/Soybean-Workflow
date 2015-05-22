@@ -1,0 +1,27 @@
+#!/bin/bash
+
+set -e
+
+if [ ! -d software ]; then
+    tar xzf software.tar.gz
+fi
+
+if [ "x$TMPDIR_OVERRIDE" != "x" ]; then
+   export TMPDIR="$TMPDIR_OVERRIDE"
+fi
+if [ "x$TMPDIR" = "x" ]; then
+   export TMPDIR=/tmp
+fi
+if [ ! -e "$TMPDIR" ]; then
+    mkdir -p $TMPDIR
+fi
+
+# sometimes we are asked to "merge" only one file
+if [ "X$1" = "Xmerge" -a "X$4" = "X" ]; then
+    # just copy
+    cp "$3" "$2"
+    exit 0
+fi
+
+./software/samtools-1.0/samtools "$@"
+

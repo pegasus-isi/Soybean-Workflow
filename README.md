@@ -4,10 +4,26 @@ Soybean-Workflow
 Note that the Git repository does not include the software required for
 the jobs. For now, grab the software tarball from
 http://www.isi.edu/~rynge/soybean/software.tar.gz . Untar it in the 
-woprkflow directory.
+top level directory.
 
-The workflow is controlled by a configuration file named
-~/.soybean-workflow.conf . Create the file with this content:
+The workflow is controlled by several configuration files:
+
+inputs-ref.txt - should contain only one URL, and that would be
+for the reference genome to use.
+
+chromosomes.txt - a list of chromsomes to process. This should
+be the same format as the reference genome. One way to generate
+this list is:
+   cat reference.fa | grep '^>' | grep -v -i scaffold
+
+inputs-fastq.txt - a list of URLs for the fastq files to process.
+Depending on the settings in conf/main.conf, the list can be either
+single-end or pair-end. In either case, put one URL on each line.
+
+conf/main.conf - this one contains general properties such as input
+formats and filters.
+
+~/.soybean-workflow.conf - Create the file with this content:
 
 ```
 # local refers to the submit host. Specify paths to a directory
