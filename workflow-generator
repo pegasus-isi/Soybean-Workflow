@@ -302,7 +302,7 @@ def prepare_ref_genome(dax, software_job, software_tar, ref_url, ref_files):
         # already a .fa file
         fa_f = File(lfn)
         fa_f.addPFN(PFN(ref_url, "irods_iplant"))
-        dax.addFile(in_f)
+        dax.addFile(fa_f)
     else:
         logger.error("Unable to handle reference genome with %s extension" %(lfn_ext))
         sys.exit(1)
