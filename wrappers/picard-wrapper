@@ -16,5 +16,5 @@ if [ ! -e "$TMPDIR" ]; then
     mkdir -p $TMPDIR
 fi
 
-java -Djava.io.tmpdir=$TMPDIR -Xmx17g -XX:+UseSerialGC -jar ./software/picard-tools-1.92/"$@"
+java -Djava.io.tmpdir=$TMPDIR -Xmx15g -XX:+UseSerialGC -jar ./software/picard-tools-1.92/"$@"
 

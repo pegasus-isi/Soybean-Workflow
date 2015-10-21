@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sitecatalog xmlns="http://pegasus.isi.edu/schema/sitecatalog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://pegasus.isi.edu/schema/sitecatalog http://pegasus.isi.edu/schema/sc-4.0.xsd" version="4.0">
+    <site  handle="local" arch="x86_64" os="LINUX">
+        <directory type="shared-scratch" path="$work_dir/scratch">
+            <file-server operation="all" url="file://$work_dir/scratch"/>
+        </directory>
+        <directory type="local-storage" path="$work_dir/outputs">
+            <file-server operation="all" url="file://$work_dir/outputs"/>
+        </directory>
+        <profile namespace="env" key="PATH">$pegasus_bin:$irods_bin:/usr/bin:/bin</profile>
+        <profile namespace="pegasus" key="SSH_PRIVATE_KEY">$home/.ssh/workflow</profile>
+    </site>
+    <site  handle="execution" arch="x86_64" os="LINUX">
+        <directory type="shared-scratch" path="/gpfs/flash/users/$tacc_username/workflow-runs">
+            <file-server operation="all" url="file:///gpfs/flash/users/$tacc_username/workflow-runs"/>
+        </directory>
+        <directory type="local-storage" path="/gpfs/flash/users/$tacc_username/final-outputs">
+            <file-server operation="all" url="file:///gpfs/flash/users/$tacc_username/final-outputs"/>
+        </directory>
+        <profile namespace="pegasus" key="style" >condor</profile>
+        <profile namespace="condor" key="universe" >vanilla</profile>
+        <profile namespace="condor" key="requirements" >TARGET.FileSystemDomain == "wrangler.tacc.utexas.edu"</profile>
+        <profile namespace="condor" key="rank" >TimeToLive</profile>
+        <profile namespace="env" key="PEGASUS_HOME" >/home/00384/rynge/software/pegasus/4.5.1</profile>
+    </site>
+    <site  handle="irods_iplant" arch="x86_64" os="LINUX">
+        <directory type="local-storage" path="/iplant/home/shared/digbio/Pegasus_GATK_Results/Output_DIR/$username">
+            <file-server operation="all" url="irods:///iplant/home/shared/digbio/Pegasus_GATK_Results/Output_DIR/$username" />
+        </directory>
+        <profile namespace="pegasus" key="irodsEnvFile" >$home/irods.iplant.json</profile>
+    </site>
+    <site  handle="isi_workflow" arch="x86_64" os="LINUX">
+        <directory type="shared-scratch" path="/local-scratch/http/$username/soykb/scratch">
+            <file-server operation="get" url="http://workflow.isi.edu/scratch/$username/soykb/scratch"/>
+            <file-server operation="put" url="scp://$username@workflow.isi.edu/local-scratch/http/$username/soykb/scratch"/>
+        </directory>
+        <directory type="local-storage" path="/local-scratch/http/$username/soykb/outputs">
+            <file-server operation="get" url="http://workflow.isi.edu/scratch/$username/soykb/outputs"/>
+            <file-server operation="put" url="scp://$username@workflow.isi.edu/local-scratch/http/$username/soykb/outputs"/>
+        </directory>
+	    <profile namespace="pegasus" key="SSH_PRIVATE_KEY">$home/.ssh/workflow</profile>
+    </site>
+</sitecatalog>
+

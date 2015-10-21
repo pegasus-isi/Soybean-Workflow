@@ -16,13 +16,15 @@ fi
 
 OUTFILE=`mktemp -t gatk-output.XXXXXXXXXX` || exit 1
 
-# memory depends on what subsystem we call
-OPTIONS="-Xmx7g -XX:+UseSerialGC"
-if (echo "'$@'" | grep -i "HaplotypeCaller") >/dev/null; then
-    OPTIONS="-Xmx2g -XX:+UseSerialGC"
-elif (echo "'$@'" | grep -i "CombineGVCFs") >/dev/null; then
-    OPTIONS="-Xmx17g -XX:+UseSerialGC"
-fi
+# first argument is memory, rest is GATK args
+MEM_TOTAL=$1
+shift
+
+# Java mx should be a little bit lower than requested memory
+MEM_JAVA_MX=$(($MEM_TOTAL - 2))
+
+OPTIONS="-Xmx${MEM_JAVA_MX}g -XX:+UseSerialGC"
+
 OPTIONS="-Djava.io.tmpdir=$TMPDIR $OPTIONS"
 
 java $OPTIONS \
