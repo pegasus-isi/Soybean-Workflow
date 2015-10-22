@@ -1020,7 +1020,8 @@ def main():
     if conf.get("exec_environment", "job_clustering") != "":
         cmd += " --cluster " + conf.get("exec_environment", "job_clustering")
           
-    cmd += " --dax soykb.dax"
+    cmd += " --dax soykb.dax" + \
+           " --submit"
     logger.info(cmd)
     myexec(cmd + " 2>&1 | tee pegasus-plan.out")
 

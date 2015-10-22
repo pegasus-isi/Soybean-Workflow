@@ -11,16 +11,17 @@
         <profile namespace="pegasus" key="SSH_PRIVATE_KEY">$home/.ssh/workflow</profile>
     </site>
     <site  handle="execution" arch="x86_64" os="LINUX">
-        <directory type="shared-scratch" path="/gpfs/flash/users/$tacc_username/workflow-runs">
-            <file-server operation="all" url="file:///gpfs/flash/users/$tacc_username/workflow-runs"/>
+        <directory type="shared-scratch" path="/gpfs/flash/users/rynge/workflow-runs">
+            <file-server operation="all" url="file:///gpfs/flash/users/rynge/workflow-runs"/>
         </directory>
-        <directory type="local-storage" path="/gpfs/flash/users/$tacc_username/final-outputs">
-            <file-server operation="all" url="file:///gpfs/flash/users/$tacc_username/final-outputs"/>
+        <directory type="local-storage" path="/gpfs/flash/users/rynge/final-outputs">
+            <file-server operation="all" url="file:///gpfs/flash/users/rynge/final-outputs"/>
         </directory>
         <profile namespace="pegasus" key="style" >condor</profile>
         <profile namespace="condor" key="universe" >vanilla</profile>
         <profile namespace="condor" key="requirements" >TARGET.FileSystemDomain == "wrangler.tacc.utexas.edu"</profile>
         <profile namespace="condor" key="rank" >TimeToLive</profile>
+        <profile namespace="condor" key="+wants_wrangler" >True</profile>
         <profile namespace="env" key="PEGASUS_HOME" >/home/00384/rynge/software/pegasus/4.5.1</profile>
     </site>
     <site  handle="irods_iplant" arch="x86_64" os="LINUX">
