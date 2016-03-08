@@ -19,7 +19,7 @@
         <directory type="local-storage" path="/iplant/home/shared/digbio/Pegasus_GATK_Results/Output_DIR/$username">
             <file-server operation="all" url="irods:///iplant/home/shared/digbio/Pegasus_GATK_Results/Output_DIR/$username" />
         </directory>
-        <profile namespace="pegasus" key="irodsEnvFile" >$home/irods.iplant.env</profile>
+        <profile namespace="pegasus" key="irodsEnvFile" >$home/irods.iplant.json</profile>
     </site>
     <site  handle="staging" arch="x86_64" os="LINUX">
         <directory type="shared-scratch" path="$work_dir/staging">
