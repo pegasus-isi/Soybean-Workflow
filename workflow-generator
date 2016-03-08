@@ -974,7 +974,7 @@ def main():
     conf.set("local", "pegasus_bin", pegasus_bin_dir)
 
     # check proxy before doing anything else
-    proxy_check()
+    #proxy_check()
     
     # create a local work directory for the workflow
     logger.info("Setting up work directory at %s" \
