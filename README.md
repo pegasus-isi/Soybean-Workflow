@@ -63,7 +63,7 @@ needs an ssh key:
 mkdir -p ~/.ssh
 ssh-keygen -t rsa -b 2048 -f ~/.ssh/workflow
      (just hit enter when asked for a passphrase)
-cat ~/workflow.pub >>~/.ssh/authorized_keys 
+cat ~/.ssh/workflow.pub >>~/.ssh/authorized_keys 
 ```
 
 To access data from the iPlant iRods repository, you need a file in your
