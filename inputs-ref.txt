@@ -1,2 +1,1 @@
-irods:///iplant/home/shared/digbio/test_pipeline/Zmays_284_AGPv3.gz
-
+http://workflow.isi.edu/SoyKB/ref/Gmax_275_v2.0.fa
