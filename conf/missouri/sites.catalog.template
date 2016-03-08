@@ -23,7 +23,7 @@
     </site>
     <site  handle="staging" arch="x86_64" os="LINUX">
         <directory type="shared-scratch" path="$work_dir/staging">
-            <file-server operation="all" url="scp://$username@master$work_dir/staging"/>
+            <file-server operation="all" url="scp://$username@plsci2.rnet.missouri.edu$work_dir/staging"/>
         </directory>
 	    <profile namespace="pegasus" key="SSH_PRIVATE_KEY">$home/.ssh/workflow</profile>
     </site>
