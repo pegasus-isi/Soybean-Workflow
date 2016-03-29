@@ -1,6 +1,2 @@
 http://workflow.isi.edu/SoyKB/sample-inputs-3/SRR1533415_1.fastq.gz
 http://workflow.isi.edu/SoyKB/sample-inputs-3/SRR1533415_2.fastq.gz
-http://workflow.isi.edu/SoyKB/sample-inputs-3/SRR1533416_1.fastq.gz
-http://workflow.isi.edu/SoyKB/sample-inputs-3/SRR1533416_2.fastq.gz
-http://workflow.isi.edu/SoyKB/sample-inputs-3/SRR1533417_1.fastq.gz
-http://workflow.isi.edu/SoyKB/sample-inputs-3/SRR1533417_2.fastq.gz

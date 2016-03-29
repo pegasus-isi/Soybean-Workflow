@@ -13,7 +13,7 @@
     <site  handle="execution" arch="x86_64" os="LINUX">
         <profile namespace="pegasus" key="style" >condor</profile>
         <profile namespace="condor" key="universe" >vanilla</profile>
-        <profile namespace="env" key="PATH">$irods_bin:/usr/bin:/bin</profile>
+        <profile namespace="env" key="PATH">$irods_bin:/opt/java/jdk1.7.0_09/bin:/usr/bin:/bin</profile>
     </site>
     <site  handle="irods_iplant" arch="x86_64" os="LINUX">
         <directory type="local-storage" path="/iplant/home/shared/digbio/Pegasus_GATK_Results/Output_DIR/$username">
