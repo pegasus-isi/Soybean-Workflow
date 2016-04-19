@@ -23,6 +23,7 @@
         <profile namespace="condor" key="rank" >TimeToLive</profile>
         <profile namespace="condor" key="+wants_wrangler" >True</profile>
         <profile namespace="env" key="PEGASUS_HOME" >/home/00384/rynge/software/pegasus/4.5.1</profile>
+        <profile namespace="env" key="TMPDIR_OVERRIDE">/tmp</profile>
     </site>
     <site  handle="irods_iplant" arch="x86_64" os="LINUX">
         <directory type="local-storage" path="/iplant/home/shared/digbio/Pegasus_GATK_Results/Output_DIR/$username">

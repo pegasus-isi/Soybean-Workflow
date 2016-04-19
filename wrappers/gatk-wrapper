@@ -8,7 +8,7 @@ if [ "x$TMPDIR_OVERRIDE" != "x" ]; then
    export TMPDIR="$TMPDIR_OVERRIDE"
 fi
 if [ "x$TMPDIR" = "x" ]; then
-   export TMPDIR=/tmp
+   export TMPDIR=$PWD/tmp
 fi
 if [ ! -e "$TMPDIR" ]; then
     mkdir -p $TMPDIR

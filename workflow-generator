@@ -816,8 +816,7 @@ def generate_dax():
     # inputs/outputs.
         
     # email notificiations for when the state of the workflow changes
-    dax.invoke('all',  conf.get("local", "pegasus_bin") +
-                       "/../share/pegasus/notification/email")
+    dax.invoke('all', conf.get("local", "top_dir") + "/email-notify")
     
     ref_urls = []
     chromosomes = []
