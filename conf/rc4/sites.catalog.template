@@ -15,6 +15,7 @@
             <file-server operation="all" url="file://$work_dir/shared-scratch"/>
         </directory>
         <profile namespace="pegasus" key="style" >glite</profile>
+        <profile namespace="pegasus" key="auxillary.local">true</profile>
         <profile namespace="condor" key="grid_resource">batch slurm</profile>
         <profile namespace="env" key="TMPDIR">/local/scratch/$username</profile>
         <profile namespace="env" key="TMPDIR_OVERRIDE">/local/scratch/$username</profile>
