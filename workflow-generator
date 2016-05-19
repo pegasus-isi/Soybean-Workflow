@@ -65,6 +65,9 @@ class ComputeJob(Job):
         self.addProfile(Profile(Namespace.CONDOR,
                                 key="request_disk",
                                 value=str(20*1024*1024)))
+        self.addProfile(Profile(Namespace.GLOBUS,
+                                key="totalmemory",
+                                value=str(mem_mb)))
 
         # special sauce for TACC - we want smaller jobs to go to the normal
         # compute nodes and the large memory ones to go to the large memory
@@ -225,7 +228,9 @@ def extract_lfn(url):
 
 def local_pfn(path):
     """ generates a full pfn given a local path """
-    pfn = "scp://" + getpass.getuser() + "@" + socket.gethostname() + "/" + path
+    pfn = PFN("scp://" + getpass.getuser() + "@" + socket.gethostname() + "/" + path, "local")
+    if re.search('rc4', conf.get("local", "exec_env")):
+    	pfn = PFN("file://" + path, "execution")
     return pfn
   
 
@@ -252,13 +257,11 @@ def add_executable(dax, logical_name, wrapper_name):
 
     if logical_name in added_execs:
         return
-
-    base_url = local_pfn(conf.get("local", "top_dir"))    
     
     wrapper = Executable(name=logical_name, 
                          arch="x86_64",
                          installed=False)
-    wrapper.addPFN(PFN(base_url + "/wrappers/" + wrapper_name, "local"))
+    wrapper.addPFN(local_pfn(conf.get("local", "top_dir") + "/wrappers/" + wrapper_name))
     dax.addExecutable(wrapper)
 
     added_execs.append(logical_name)
@@ -457,7 +460,7 @@ def add_replace(sample_name, dax, software_tar, chromosomes, ref_files, tracked_
                    "O=" + tracked_files['addrepl_reads'].name,
                    "RGID=" + sample_name,
                    "LB=" + sample_name,
-                   "PL=\"Illumina\"",
+                   "PL=Illumina",
                    "SM=" + sample_name,
                    "CN=BGI",
                    "RGPU=" + sample_name,
@@ -690,7 +693,7 @@ def merge_gvcf(dax, software_file, chromosomes, ref_files, tracked_files, sample
         fd.write("%s\n" %(f))
     fd.close()
     hf = File("haplotype-files.list")
-    hf.addPFN(PFN(local_pfn(conf.get("local", "work_dir") + "/haplotype-files.list"), "local"))
+    hf.addPFN(local_pfn(conf.get("local", "work_dir") + "/haplotype-files.list"))
     dax.addFile(hf)
     j.uses("haplotype-files.list", link=Link.INPUT)
 
@@ -831,7 +834,7 @@ def generate_dax():
 
     # we need to bring a copy of the software with us
     software_tar = File("software.tar.gz")
-    software_tar.addPFN(PFN(local_pfn(conf.get("local", "work_dir") + "/software.tar.gz"), "local"))
+    software_tar.addPFN(local_pfn(conf.get("local", "work_dir") + "/software.tar.gz"))
     dax.addFile(software_tar)    
     add_executable(dax, "software-wrapper", "software-wrapper")
     software_job = ComputeJob("software-wrapper", cores=1, mem_gb=1)
